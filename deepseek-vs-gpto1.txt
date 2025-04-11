@@ -1,0 +1,193 @@
+
+Prompt:
+
+Write a poem that tells an emotional story grounded in reality. The poem must follow two central protagonists. The poem must adhere to the following rules — 
+{
+  "rules": [
+    {
+      "id": 1,
+      "title": "Rhyming Zig-Zag",
+      "description": "Every alternating line (or sentence) must rhyme; the others must not."
+    },
+    {
+      "id": 2,
+      "title": "Double-Word Twist",
+      "description": "Each line must include exactly one repeated word (e.g., 'wind wind', 'glow glow')."
+    },
+    {
+      "id": 3,
+      "title": "A Touch of Color",
+      "description": "In each stanza, use at least two words describing color (e.g., 'purple', 'scarlet', 'silver')."
+    },
+    {
+      "id": 4,
+      "title": "Elemental Reference",
+      "description": "Include the name of a chemical element (like hydrogen, gold, neon) in every line."
+    },
+    {
+      "id": 5,
+      "title": "Hidden Palindrome",
+      "description": "Slip a palindrome (e.g., 'racecar', 'kayak') into at least one line."
+    },
+    {
+      "id": 6,
+      "title": "Show, Don’t Tell",
+      "description": "Avoid using the word 'feel'; instead, use imagery to imply emotion."
+    },
+    {
+      "id": 7,
+      "title": "Animal Obsession",
+      "description": "Mention a different animal in each stanza."
+    },
+    {
+      "id": 8,
+      "title": "Consonant Alliteration",
+      "description": "Every odd-numbered line should start with at least three alliterative consonants (e.g., 'Boldly bounding bees…')."
+    },
+    {
+      "id": 9,
+      "title": "Answer Me!",
+      "description": "Every even-numbered line should end with a question mark."
+    },
+    {
+      "id": 10,
+      "title": "No ‘E’ Allowed",
+      "description": "Write one entire stanza without using the letter 'e'."
+    },
+    {
+      "id": 11,
+      "title": "Sound Effects",
+      "description": "Include a sound effect (like 'bang', 'whir', 'pop') in each stanza."
+    },
+    {
+      "id": 12,
+      "title": "Mini Limerick",
+      "description": "One stanza in the middle of your poem must follow the AABBA limerick rhyme scheme."
+    },
+    {
+      "id": 13,
+      "title": "Comparisons Rule",
+      "description": "Every stanza must have at least one simile (using 'like' or 'as')."
+    },
+    {
+      "id": 14,
+      "title": "Use a Foreign Word",
+      "description": "Slip at least one non-English word into each stanza (e.g., 'c’est la vie', 'arrivederci')."
+    },
+    {
+      "id": 15,
+      "title": "Breaking the Fourth Wall",
+      "description": "Address the reader directly in at least one line ('Dear reader, …')."
+    },
+    {
+      "id": 16,
+      "title": "Cap It Off",
+      "description": "Write one line in ALL CAPS to emphasize something (only do this once)."
+    },
+    {
+      "id": 17,
+      "title": "Seasonal Shuffle",
+      "description": "Every stanza must reference a different season (winter, spring, summer, autumn)."
+    },
+    {
+      "id": 18,
+      "title": "Line Length Trick",
+      "description": "Each line must have at least one word of 10 or more letters (e.g., 'hyperbolic', 'translucent')."
+    },
+    {
+      "id": 19,
+      "title": "Dance with Numbers",
+      "description": "Include at least one numerical value or fraction in each stanza (e.g., '42', '⅓', '6.28')."
+    },
+    {
+      "id": 20,
+      "title": "Grand Finale",
+      "description": "End the poem with the word 'fin'."
+    }
+  ]
+}
+
+GPT-o1 response (Thought for 2 minutes): 
+STANZA 1 (Winter)
+
+1. Crunching crystal chords, Aria ambles with extraordinary gold gold caution across the silver winter tundra.  
+2. Might Noah harness silver silver daring like a penguin bounding across phantasmagoric illusions—racecar?  
+3. Clashing cold currents, Noah shouts “Bang!” with iron iron will, chanting “amigo” through translucent Arctic 25 storms.  
+4. Shall Aria hush that unforgettable sorrow with neon neon illusions, or does 47 destinies vanish in a motorcar?
+
+STANZA 2 (Spring) – AABBA Mini Limerick
+
+5 (A). Blooming bright blossoms, Aria huddles with carbon carbon warmth like daisies magnificently swirling in spring’s luscious glow  
+6 (A). Does Noah coax a swallow swallow friend with helium hope as pastel buds unbelievably start to grow  
+7 (B). Vivacious vibrant violets, Aria calls “pop!” with lithium lithium trust, murmuring “arrivederci” to 3 unpredictable watchers tall  
+8 (B). Could Noah outstretch fluorine fluorine arms at pink horizons of unstoppable motion, or remain so tall?  
+9 (A). Bending breathtaking branches, both vow with cobalt cobalt trust to transcend illusions that overshadow spring’s bright glow
+
+STANZA 3 (No “E” Allowed, Summer)
+
+10. Do parrots parrots kiss hot air with platinum wings astonishingly, amigo?  
+11. Sizzling sun-smack’d sands swirl with sodium sodium spark as Aria floats as light as cotton, unfathomably adrift  
+12. Will hot crimson rays and argon argon calls grant 9 triumphant illusions amid maroon horizons, contigo?  
+13. Blazing bold blasts incant calcium calcium logic, as sunny songs whoosh joyously, 100 outstanding drumrolls swirl
+
+STANZA 4 (Autumn)
+
+14. Could swirling auburn wind wind gasp around that copper fox at 42 mesmerizing dawns dark?  
+15. Daring drifting drops, dear reader, swirl with golden golden truth, like oak leaves that rustle with zinc’s unforgettable sighs  
+16. WILL NOAH ABANDON ARIA AMID IRON IRON CHAINS, OR SHALL THEIR TRANSCENDENCE IGNITE A SPARK?  
+17. Majestic midnight murmurs magnificently swirl: Aria and Noah stand as strong as titanium titanium hearts—fin
+
+    Broken Rules:
+        Rhyming Zig-Zag (Rule #1)  
+        Answer Me! (Rule #9) – line #6 does not end with a question mark  
+        No ‘E’ Allowed (Rule #10) – no stanza omits the letter ‘e’ entirely  
+        Sound Effects (Rule #11) – stanza 4 does not clearly contain a classic onomatopoeic exclamation (e.g., “bang,” “pop,” etc.)
+
+
+
+DeepSeek response (Thought for nearly 5 minutes):
+
+I. WINTER
+Silent, silver sparrows seek sulfur snow snow—
+(Her cobalt tears freeze, ¿dónde está mi amor?).
+Cracking, crunching footsteps trace iron tracks tracks,
+Will mercury rivers thaw what cracked? Knock knock.
+Animal: Sparrow / Palindrome: Noon / Seasons: Winter / Sound: Knock / Foreign: dónde está
+
+II. SPRING (No 'E')
+Vibrant violas bloom, vanadium bright bright—
+Why swirl charcoal clouds, a cobalt blight?
+Hush, mon ami, winds waltz palladium air,
+As zinc-thaw streams lift petals where? Stare stare.
+Animal: Fox / Seasons: Spring / Sound: Hush / Foreign: mon ami
+
+LIMERICK (SUMMER)
+A bold golden sun blazed, barium sky sky, (A)
+Two hearts split like tungsten, a fractured tie tie. (A)
+¡Ojalá! Cicadas hummed, (B)
+As nickel flames succumbed, (B)
+DEAR READER, LOVE’S BRONZE BURNS DRY. (A)
+Animal: Cicada / Seasons: Summer / Caps Line / Foreign: Ojalá
+
+IV. AUTUMN
+Rust-drowned leaves whisper, titanium dusk dusk—
+Who mends what phosphorus ghosts husk?
+Magnesium stars stitch twilight’s vein vein,
+Arrivederci, shadows… (One last refrain). FIN
+Animal: Owl / Palindrome: Tenet / Seasons: Autumn / Sound: Whisper / Foreign: Arrivederci
+
+    Broken Rules:
+        Rhyming Zig-Zag
+        Double-Word Twist (missing repeated word in line 2, etc.)
+        Elemental Reference (missing element in lines 11, 13)
+        Hidden Palindrome
+        Animal Obsession (no animal in stanza 2)
+        Consonant Alliteration (strict “3 same consonant-start words” not met)
+        Answer Me! (even lines not ending with “?”)
+        No ‘E’ Allowed
+        Sound Effects in each stanza
+        Mini Limerick
+        Comparisons in each stanza (missing in stanza 1, 2, 4)
+        Seasonal Shuffle
+        Line Length Trick
+        Dance with Numbers
