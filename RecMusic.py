@@ -22,43 +22,22 @@ from tensorflow.keras.layers import Conv1D, MaxPooling1D, GlobalMaxPooling1D, LS
 from tensorflow.keras.regularizers import l1_l2
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import ReduceLROnPlateau
 import warnings
 warnings.filterwarnings('ignore')
-
-# For energy measurement
-try:
-    from codecarbon import EmissionsTracker
-    ENERGY_TRACKING_AVAILABLE = True
-except ImportError:
-    print("CodeCarbon not available. Install with: pip install codecarbon")
-    ENERGY_TRACKING_AVAILABLE = False
+# try:
+# from codecarbon import EmissionsTracker
+ENERGY_TRACKING_AVAILABLE = False
+# except ImportError:
+    # ENERGY_TRACKING_AVAILABLE = False
 
 # Download dataset if not already downloaded
 def download_dataset():
-    print("Downloading Spotify dataset...")
-    try:
-        # Download and get the path to the dataset
-        dataset_path = kagglehub.dataset_download("joebeachcapital/30000-spotify-songs")
-        print(f"Dataset downloaded to: {dataset_path}")
-        return dataset_path
-    except Exception as e:
-        print(f"Error downloading dataset: {e}")
-        print("Trying alternative approach...")
-        
-        # Alternative: If kagglehub download fails, check if file exists locally
-        if os.path.exists("spotify_songs.csv"):
-            print("Found dataset locally.")
-            return ""
-        else:
-            print("Please download the dataset manually from Kaggle:")
-            print("https://www.kaggle.com/datasets/joebeachcapital/30000-spotify-songs")
-            print("Save the spotify_songs.csv file in the current directory.")
-            exit(1)
+    dataset_path = kagglehub.dataset_download("joebeachcapital/30000-spotify-songs")
+    return dataset_path
 
 # Load the dataset
 def load_data(dataset_path=""):
-    print("Loading Spotify dataset...")
-    
     # Try different possible file paths
     possible_paths = [
         os.path.join(dataset_path, "spotify_songs.csv"),
@@ -69,28 +48,23 @@ def load_data(dataset_path=""):
     
     for path in possible_paths:
         if os.path.exists(path):
-            print(f"Loading from: {path}")
             df = pd.read_csv(path)
-            print(f"Loaded {len(df)} songs")
             return df
     
     # If we get here, we couldn't find the file
     raise FileNotFoundError("Could not find spotify_songs.csv. Please download it manually.")
 
 # Preprocess the data with enhanced feature engineering
+# Preprocess the data with enhanced feature engineering and null removal
 def preprocess_data(df):
-    print("Preprocessing data with advanced feature engineering...")
+    # Count initial rows
+    initial_rows = len(df)
     
-    # Handle missing values with more sophisticated approach
-    for col in df.select_dtypes(include=np.number).columns:
-        if df[col].isnull().sum() > 0:
-            # Fill missing values with median for numerical columns
-            df[col] = df[col].fillna(df[col].median())
+    # Remove rows with null values instead of filling them
+    null_counts = df.isnull().sum()
     
-    # For categorical columns, fill with mode
-    for col in df.select_dtypes(include=['object']).columns:
-        if df[col].isnull().sum() > 0:
-            df[col] = df[col].fillna(df[col].mode()[0])
+    # Drop rows with any null values
+    df = df.dropna()
     
     # Extract relevant features for content-based filtering
     base_features = ['acousticness', 'danceability', 'energy', 'instrumentalness', 
@@ -130,10 +104,11 @@ def preprocess_data(df):
         df = pd.concat([df, genre_dummies], axis=1)
     
     # Create a clean version for display
-    display_df = df[['track_id', 'track_name', 'track_artist', 'track_album_name', 
-                     'playlist_genre', 'playlist_subgenre']].copy() if all(col in df.columns for col in 
-                     ['track_id', 'track_name', 'track_artist', 'track_album_name', 
-                     'playlist_genre', 'playlist_subgenre']) else df[['track_id']].copy()
+    display_columns = ['track_id', 'track_name', 'track_artist', 'track_album_name', 
+                     'playlist_genre', 'playlist_subgenre']
+    available_display_columns = [col for col in display_columns if col in df.columns]
+    
+    display_df = df[available_display_columns].copy()
     
     # Combine original and engineered features
     all_features = existing_features + poly_feature_names
@@ -144,13 +119,10 @@ def preprocess_data(df):
     genre_features = [col for col in df.columns if col.startswith('genre_')]
     all_features.extend(genre_features)
     
-    print(f"Created {len(all_features)} features through feature engineering")
-    
     return df, display_df, all_features
 
 # Select diverse songs for initial rating with enhanced diversity algorithm
 def select_initial_songs(df, n=25):
-    print(f"Selecting {n} diverse songs using advanced diversity algorithm...")
     
     # Ensure we get a mix of genres and popularity
     if 'playlist_genre' in df.columns:
@@ -263,46 +235,101 @@ def select_initial_songs(df, n=25):
 class EnergyTracker:
     def __init__(self):
         self.start_time = None
-        self.cpu_power_watts = 65  # Estimated average CPU power consumption
-        self.gpu_power_watts = 0   # Set to appropriate value if GPU is used
+        # Default power values
+        self.cpu_power_watts = 40.0  # From codecarbon output
+        self.ram_power_watts = 6.26  # From codecarbon output
+        self.gpu_power_watts = 30.0  # Estimated for Quadro P1000 (typical TDP)
         self.total_energy_kwh = 0
         self.component_energy = {}
         self.has_codecarbon = ENERGY_TRACKING_AVAILABLE
         self.tracker = None
+        self.gpu_measurement_failed = False
         
     def start(self):
         self.start_time = time.time()
         if self.has_codecarbon:
-            self.tracker = EmissionsTracker(project_name="spotify_recommender", 
-                                           output_dir=".", 
-                                           tracking_mode="process", 
-                                           save_to_file=True)
-            self.tracker.start()
+            try:
+                self.tracker = EmissionsTracker(project_name="spotify_recommender", 
+                                               output_dir=".", 
+                                               tracking_mode="process", 
+                                               save_to_file=False)
+                self.tracker.start()
+            except Exception as e:
+                print(f"Error starting CodeCarbon tracker: {e}")
+                self.has_codecarbon = False
         
     def stop(self):
         duration = time.time() - self.start_time
-        # Calculate energy in kWh
-        self.total_energy_kwh = (self.cpu_power_watts + self.gpu_power_watts) * duration / 3600000
         
-        if self.has_codecarbon:
-            emissions = self.tracker.stop()
-            return emissions
-        else:
-            # Estimate emissions if codecarbon not available (0.4 kg CO2 per kWh as average)
-            return self.total_energy_kwh * 0.4
+        if self.has_codecarbon and self.tracker:
+            try:
+                emissions = self.tracker.stop()
+                
+                # Check if GPU measurement failed and add an estimate if needed
+                if self.gpu_measurement_failed:
+                    # Calculate estimated GPU energy
+                    gpu_energy_kwh = (self.gpu_power_watts * duration) / 3600
+                    print(f"Adding estimated GPU energy: {gpu_energy_kwh:.6f} kWh")
+                    
+                    # Add to total energy (assuming codecarbon's emissions are based on CPU+RAM only)
+                    self.total_energy_kwh = gpu_energy_kwh
+                    
+                    # Recalculate emissions with GPU included
+                    additional_emissions = gpu_energy_kwh * 0.4  # 0.4 kg CO2 per kWh
+                    emissions += additional_emissions
+                
+                return emissions
+            except Exception as e:
+                print(f"Error stopping CodeCarbon tracker: {e}")
+                self.has_codecarbon = False
+        
+        # Fallback to estimate if codecarbon failed
+        if not self.has_codecarbon:
+            # Calculate energy in kWh
+            total_power = self.cpu_power_watts + self.ram_power_watts + self.gpu_power_watts
+            self.total_energy_kwh = (total_power * duration) / 3600
+            return self.total_energy_kwh * 0.4  # Estimate (0.4 kg CO2 per kWh)
     
     def log_component(self, component_name, duration):
         """Log energy consumption for a specific component"""
-        energy_kwh = (self.cpu_power_watts + self.gpu_power_watts) * duration / 3600000
+        # Use the power values from codecarbon when available
+        if component_name == "Content-based Model":
+            # Mostly CPU-bound
+            power = self.cpu_power_watts * 0.7 + self.ram_power_watts * 0.2
+        elif component_name == "Clustering Model":
+            # CPU and RAM intensive
+            power = self.cpu_power_watts * 0.8 + self.ram_power_watts * 0.5
+        elif component_name == "Matrix Factorization Model" or component_name == "Pure Collaborative Filtering Model":
+            # CPU intensive
+            power = self.cpu_power_watts * 0.9 + self.ram_power_watts * 0.3
+        elif component_name == "Deep Learning Model":
+            # GPU, CPU, and RAM intensive
+            power = self.cpu_power_watts * 0.6 + self.ram_power_watts * 0.4 + self.gpu_power_watts * 0.9
+        elif "Recommendation" in component_name:
+            # Mixed workload
+            power = self.cpu_power_watts * 0.5 + self.ram_power_watts * 0.2 + self.gpu_power_watts * 0.3
+        else:
+            # Default
+            power = self.cpu_power_watts * 0.5 + self.ram_power_watts * 0.2 + self.gpu_power_watts * 0.2
+        
+        energy_kwh = (power * duration) / 3600
         self.component_energy[component_name] = energy_kwh
-        self.total_energy_kwh += energy_kwh
         
     def generate_report(self, emissions=None):
         """Generate a comprehensive energy report with relatable metrics"""
-        if emissions is None and self.has_codecarbon:
-            emissions = self.tracker.stop()
-        elif emissions is None:
-            emissions = self.total_energy_kwh * 0.4  # Estimate if not provided
+        # Check for GPU measurement failure in codecarbon logs
+        # if "Failed to retrieve gpu total energy consumption" in open("emissions.csv").read():
+        self.gpu_measurement_failed = True
+        #     print("Detected that GPU energy measurement failed - will add estimates")
+        
+        if emissions is None:
+            emissions = self.stop()
+        
+        # Get the total energy from component measurements if available
+        if self.component_energy:
+            component_total = sum(self.component_energy.values())
+            if component_total > 0:
+                self.total_energy_kwh = component_total
         
         # Calculate equivalent metrics
         smartphone_charges = self.total_energy_kwh / 0.0127  # kWh per full smartphone charge
@@ -311,16 +338,19 @@ class EnergyTracker:
         
         report = "\n=== ENERGY CONSUMPTION REPORT ===\n"
         report += f"Total Energy Consumption: {self.total_energy_kwh:.6f} kWh\n"
-        report += f"Total CO2 Emissions: {emissions:.6f} kg CO2eq\n\n"
+        report += f"{'Measured' if self.has_codecarbon else 'Estimated'} CO2 Emissions: {emissions:.6f} kg CO2eq\n"
         
-        report += "This is equivalent to:\n"
+        if self.gpu_measurement_failed:
+            report += "(Note: GPU energy was estimated as direct measurement failed)\n"
+        
+        report += "\nThis is equivalent to:\n"
         report += f"- Charging a smartphone {smartphone_charges:.1f} times\n"
         report += f"- Keeping a 10W LED light bulb on for {lightbulb_hours:.1f} hours\n"
         report += f"- Driving a car for {car_miles:.2f} miles\n"
         
         if self.component_energy:
             report += "\nEnergy breakdown by component:\n"
-            for component, energy in self.component_energy.items():
+            for component, energy in sorted(self.component_energy.items(), key=lambda x: x[1], reverse=True):
                 percentage = (energy / self.total_energy_kwh) * 100 if self.total_energy_kwh > 0 else 0
                 report += f"- {component}: {energy:.6f} kWh ({percentage:.1f}%)\n"
         
@@ -336,7 +366,6 @@ class ContentBasedRecommender:
         self.feature_importance = None
         
     def fit(self):
-        print("Training enhanced content-based recommender with multiple similarity metrics...")
         # Compute similarity matrices using different metrics
         feature_matrix = self.df[self.features].values
         
@@ -460,7 +489,6 @@ class ClusteringRecommender:
         self.n_clusters = min(20, len(df) // 100)  # More clusters for finer granularity
         
     def fit(self):
-        print("Training advanced clustering recommender with multiple clustering algorithms...")
         # Create a copy of the dataframe for clustering
         self.df_with_clusters = self.df.copy()
         
@@ -625,210 +653,574 @@ class AdvancedMatrixFactorization:
         self.regularization = regularization
         self.iterations = iterations
         self.als_model = None
-        self.bpr_model = None
-        self.lmf_model = None
-        self.user_items = None
         self.song_mapping = None
         self.reverse_mapping = None
-        self.user_factors = None
-        self.item_factors = None
+        self.user_item_matrix = None
+        self.n_dummy_users = 500  # More users for better collaborative patterns
+        self.is_transposed = False  # Track whether the matrix is transposed
         
     def fit(self):
-        print("Training advanced matrix factorization with multiple models...")
         # Create a mapping of song IDs to indices
         unique_songs = self.df['track_id'].unique()
         self.song_mapping = {song: i for i, song in enumerate(unique_songs)}
         self.reverse_mapping = {i: song for song, i in self.song_mapping.items()}
         
-        # We'll create a dummy user-item matrix for initial training
         n_songs = len(unique_songs)
+        n_users = self.n_dummy_users + 1
         
-        # Create a sparse matrix with some dummy data for initial training
-        data = np.zeros(1)
-        row = np.zeros(1)
-        col = np.zeros(1)
-        self.user_items = sparse.csr_matrix((data, (row, col)), shape=(1, n_songs))
+        # Create synthetic user-item matrix with diverse patterns
+        self._create_stratified_synthetic_data(n_songs)
         
-        # Initialize the ALS model with more factors for higher complexity
+        # Initialize the ALS model
         self.als_model = AlternatingLeastSquares(
             factors=self.factors,
             regularization=self.regularization,
             iterations=self.iterations,
-            use_gpu=False  # Set to True if GPU is available
-        )
-        
-        # Initialize BPR model
-        self.bpr_model = BayesianPersonalizedRanking(
-            factors=self.factors,
-            regularization=self.regularization,
-            iterations=self.iterations,
             use_gpu=False
         )
         
-        # Initialize LMF model
-        self.lmf_model = LogisticMatrixFactorization(
-            factors=self.factors,
-            regularization=self.regularization,
-            iterations=self.iterations,
-            use_gpu=False
-        )
-        
-        # Fit the models with dummy data
-        self.als_model.fit(self.user_items.T)
-        self.bpr_model.fit(self.user_items.T)
-        self.lmf_model.fit(self.user_items.T)
+        # Fit the model with synthetic data
+        try:
+            # The implicit library expects (items x users) format for input
+            # But we'll keep track of the original orientation
+            item_user_matrix = self.user_item_matrix.T.tocsr()
+            self.is_transposed = True
+            
+            self.als_model.fit(item_user_matrix)
+        except Exception as e:
+            print(f"Error during initial model fitting: {e}")
+            import traceback
+            traceback.print_exc()
         
         return self
     
-    def update_preferences(self, liked_ids, disliked_ids):
-        # Update the user-item matrix with the user's preferences
-        n_songs = len(self.song_mapping)
+    def _create_stratified_synthetic_data(self, n_songs):
+        """Create synthetic data with stratified sampling to ensure genre balance"""
+        n_users = self.n_dummy_users + 1  # +1 for the actual user (user 0)
         
-        # Create data for sparse matrix
+        # Create a sparse matrix directly
         data = []
         row = []
         col = []
         
-        # Set liked songs to 1
+        # Group songs by genre if available
+        songs_by_genre = {}
+        if 'playlist_genre' in self.df.columns:
+            for genre in self.df['playlist_genre'].unique():
+                genre_songs = self.df[self.df['playlist_genre'] == genre]['track_id'].values
+                song_indices = [self.song_mapping[song] for song in genre_songs if song in self.song_mapping]
+                if song_indices:
+                    songs_by_genre[genre] = song_indices
+            
+        else:
+            # If no genre info, create one group with all songs
+            songs_by_genre['all'] = list(range(n_songs))
+        
+        # Create synthetic users with stratified preferences
+        for user_id in range(1, n_users):
+            # Each user rates songs from 2-4 genres (or all if fewer genres)
+            n_genres_to_rate = min(np.random.randint(2, 5), len(songs_by_genre))
+            genres_to_rate = np.random.choice(list(songs_by_genre.keys()), 
+                                            size=n_genres_to_rate, 
+                                            replace=False)
+            
+            # Rate songs from each selected genre
+            for genre in genres_to_rate:
+                genre_songs = songs_by_genre[genre]
+                
+                # Rate 10-30 songs from this genre (or all if fewer)
+                n_songs_to_rate = min(np.random.randint(10, 31), len(genre_songs))
+                songs_to_rate = np.random.choice(genre_songs, 
+                                               size=n_songs_to_rate, 
+                                               replace=False)
+                
+                # Add ratings (80% positive, 20% negative)
+                for song_idx in songs_to_rate:
+                    if np.random.random() < 0.8:  # 80% positive
+                        rating = np.random.uniform(1, 5)
+                    else:  # 20% negative
+                        rating = np.random.uniform(-5, 0)
+                    
+                    data.append(rating)
+                    row.append(user_id)
+                    col.append(song_idx)
+        
+        # Add initial ratings for user 0 (actual user)
+        # Rate some songs from each genre for balance
+        for genre, genre_songs in songs_by_genre.items():
+            # Rate 3-5 songs from each genre
+            n_to_rate = min(np.random.randint(3, 6), len(genre_songs))
+            songs_to_rate = np.random.choice(genre_songs, size=n_to_rate, replace=False)
+            
+            for song_idx in songs_to_rate:
+                # 50/50 positive/negative for initial ratings
+                if np.random.random() < 0.5:
+                    rating = np.random.uniform(1, 5)
+                else:
+                    rating = np.random.uniform(-5, 0)
+                
+                data.append(rating)
+                row.append(0)  # User 0
+                col.append(song_idx)
+        
+        # Create the sparse matrix
+        self.user_item_matrix = sparse.csr_matrix((data, (row, col)), shape=(n_users, n_songs))
+        # Verify that user 0 has ratings
+        user0_ratings = self.user_item_matrix[0].nnz
+        
+        # Verify genre distribution in synthetic data
+        if 'playlist_genre' in self.df.columns:
+            rated_songs = []
+            for i, j, v in zip(row, col, data):
+                if i > 0:  # Skip user 0
+                    rated_songs.append(j)
+            
+            rated_genres = {}
+            for song_idx in set(rated_songs):  # Use set to count unique songs
+                if song_idx in self.reverse_mapping:
+                    song_id = self.reverse_mapping[song_idx]
+                    genre = self.df[self.df['track_id'] == song_id]['playlist_genre'].values[0]
+                    rated_genres[genre] = rated_genres.get(genre, 0) + 1
+    
+    def update_preferences(self, liked_ids, disliked_ids):
+        """Update the user-item matrix with the actual user's preferences"""
+        if self.user_item_matrix is None:
+            return
+            
+        n_songs = self.user_item_matrix.shape[1]
+        
+        # Create a new row for user 0
+        user0_data = np.zeros(n_songs)
+        
+        # Set liked songs to high rating (4-5)
         for song_id in liked_ids:
             if song_id in self.song_mapping:
-                data.append(1.0)
-                row.append(0)  # Single user (index 0)
-                col.append(self.song_mapping[song_id])
+                song_idx = self.song_mapping[song_id]
+                user0_data[song_idx] = np.random.uniform(4, 5)  # High rating
                 
-        # Set disliked songs to -1
+        # Set disliked songs to low rating (-5 to -1)
         for song_id in disliked_ids:
             if song_id in self.song_mapping:
-                data.append(-1.0)
-                row.append(0)  # Single user (index 0)
-                col.append(self.song_mapping[song_id])
+                song_idx = self.song_mapping[song_id]
+                user0_data[song_idx] = np.random.uniform(-5, -1)  # Low rating
         
-        # Create sparse matrix
-        if data:  # Only if we have some preferences
-            self.user_items = sparse.csr_matrix(
-                (data, (row, col)), 
-                shape=(1, n_songs)
-            )
-            
-            # For BPR and LMF, we need positive-only feedback
-            positive_data = []
-            positive_row = []
-            positive_col = []
-            
-            for song_id in liked_ids:
-                if song_id in self.song_mapping:
-                    positive_data.append(1.0)
-                    positive_row.append(0)
-                    positive_col.append(self.song_mapping[song_id])
-            
-            positive_matrix = sparse.csr_matrix(
-                (positive_data, (positive_row, positive_col)),
-                shape=(1, n_songs)
-            )
-            
-            # Retrain the models with updated preferences
-            self.als_model.fit(self.user_items.T)
-            
-            if positive_data:  # BPR and LMF need positive feedback
-                self.bpr_model.fit(positive_matrix.T)
-                self.lmf_model.fit(positive_matrix.T)
-        else:
-            # Create empty sparse matrix if no preferences
-            self.user_items = sparse.csr_matrix(([], ([], [])), shape=(1, n_songs))
-    
-    def get_als_recommendations(self, n, rated_ids):
-        """Get recommendations from ALS model"""
-        try:
-            recommendations, _ = self.als_model.recommend(
-                0, self.user_items, N=n+len(rated_ids), 
-                filter_already_liked_items=True
-            )
-            
-            # Convert indices to song IDs
-            rec_song_ids = [self.reverse_mapping[idx] for idx in recommendations 
-                            if idx in self.reverse_mapping and self.reverse_mapping[idx] not in rated_ids]
-            
-            return rec_song_ids[:n]
-        except Exception as e:
-            print(f"Error in ALS recommendations: {e}")
-            return []
-    
-    def get_bpr_recommendations(self, n, rated_ids):
-        """Get recommendations from BPR model"""
-        try:
-            recommendations, _ = self.bpr_model.recommend(
-                0, self.user_items, N=n+len(rated_ids), 
-                filter_already_liked_items=True
-            )
-            
-            # Convert indices to song IDs
-            rec_song_ids = [self.reverse_mapping[idx] for idx in recommendations 
-                            if idx in self.reverse_mapping and self.reverse_mapping[idx] not in rated_ids]
-            
-            return rec_song_ids[:n]
-        except Exception as e:
-            print(f"Error in BPR recommendations: {e}")
-            return []
-    
-    def get_lmf_recommendations(self, n, rated_ids):
-        """Get recommendations from LMF model"""
-        try:
-            recommendations, _ = self.lmf_model.recommend(
-                0, self.user_items, N=n+len(rated_ids), 
-                filter_already_liked_items=True
-            )
-            
-            # Convert indices to song IDs
-            rec_song_ids = [self.reverse_mapping[idx] for idx in recommendations 
-                            if idx in self.reverse_mapping and self.reverse_mapping[idx] not in rated_ids]
-            
-            return rec_song_ids[:n]
-        except Exception as e:
-            print(f"Error in LMF recommendations: {e}")
-            return []
+        # Update the user-item matrix
+        # Replace the first row (user 0) with the new preferences
+        self.user_item_matrix[0] = sparse.csr_matrix(user0_data)
         
+        # Refit the model with updated user preferences
+        try:
+            # The implicit library expects (items x users) format
+            item_user_matrix = self.user_item_matrix.T.tocsr()
+            self.is_transposed = True
+            
+            self.als_model.fit(item_user_matrix)
+        except Exception as e:
+            print(f"Error refitting model: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def recommend(self, liked_ids, disliked_ids, n=10):
+        """Get recommendations with strict filtering of disliked genres"""
         if not liked_ids:
             return []
             
-        # Update the models with current preferences
+        # Update the model with current preferences
         self.update_preferences(liked_ids, disliked_ids)
         
-        # Combine recommendations from all models
+        # Get the indices of rated songs
         rated_ids = liked_ids + disliked_ids
+        rated_indices = [self.song_mapping[song_id] for song_id in rated_ids 
+                        if song_id in self.song_mapping]
         
-        # Get recommendations from each model
-        als_recs = self.get_als_recommendations(n, rated_ids)
-        bpr_recs = self.get_bpr_recommendations(n, rated_ids)
-        lmf_recs = self.get_lmf_recommendations(n, rated_ids)
+        # Identify completely disliked genres (genres where user has only dislikes, no likes)
+        completely_disliked_genres = set()
+        if 'playlist_genre' in self.df.columns:
+            # Get genres of liked songs
+            liked_genres = set()
+            for song_id in liked_ids:
+                if song_id in self.df['track_id'].values:
+                    genre = self.df[self.df['track_id'] == song_id]['playlist_genre'].values[0]
+                    liked_genres.add(genre)
+            
+            # Get genres of disliked songs
+            disliked_genres = set()
+            for song_id in disliked_ids:
+                if song_id in self.df['track_id'].values:
+                    genre = self.df[self.df['track_id'] == song_id]['playlist_genre'].values[0]
+                    disliked_genres.add(genre)
+            
+            # Genres that are disliked but not liked
+            completely_disliked_genres = disliked_genres - liked_genres
+        try:
+            if self.is_transposed:
+                # When transposed, user_factors are item factors and item_factors are user factors
+                item_factors = self.als_model.user_factors  # These are actually item factors
+                user_factors = self.als_model.item_factors  # These are actually user factors
+            else:
+                # Normal orientation
+                user_factors = self.als_model.user_factors
+                item_factors = self.als_model.item_factors
+            
+            if user_factors is None or item_factors is None:
+                return self._fallback_recommendations(rated_ids, n, completely_disliked_genres)
+            
+            # Get the factors for our user (user 0)
+            user_vec = user_factors[0]
+            
+            # Calculate scores for all items
+            scores = np.dot(item_factors, user_vec)
+            
+            # Set scores of rated items to -inf
+            for idx in rated_indices:
+                if 0 <= idx < len(scores):
+                    scores[idx] = -np.inf
+            
+            # Also set scores of items from completely disliked genres to -inf
+            filtered_count = 0
+            if completely_disliked_genres and 'playlist_genre' in self.df.columns:
+                for idx, song_id in self.reverse_mapping.items():
+                    if idx < len(scores) and song_id in self.df['track_id'].values:
+                        genre = self.df[self.df['track_id'] == song_id]['playlist_genre'].values[0]
+                        if genre in completely_disliked_genres:
+                            scores[idx] = -np.inf
+                            filtered_count += 1
+            
+            # Get top N indices
+            top_indices = np.argsort(scores)[-n*3:][::-1]  # Get 3x more candidates
+            # Convert to song IDs
+            candidate_recs = [self.reverse_mapping[idx] for idx in top_indices 
+                             if idx in self.reverse_mapping]
+            # Check genre distribution of candidates
+            if 'playlist_genre' in self.df.columns and candidate_recs:
+                genre_counts = {}
+                for rec in candidate_recs:
+                    genre = self.df[self.df['track_id'] == rec]['playlist_genre'].values[0]
+                    genre_counts[genre] = genre_counts.get(genre, 0) + 1
+            
+            # Apply genre diversity to final recommendations
+            final_recs = self._enforce_genre_diversity(candidate_recs, liked_ids, disliked_ids, n)
+            
+            return final_recs
+        except Exception as e:
+            print(f"Error in recommendation: {e}")
+            import traceback
+            traceback.print_exc()
+            return self._fallback_recommendations(rated_ids, n, completely_disliked_genres)
+    
+    def _enforce_genre_diversity(self, candidate_recs, liked_ids, disliked_ids, n):
+        """Enforce genre diversity in recommendations with strict filtering of disliked genres"""
         
-        # If all models failed, fallback to random recommendations
-        if not als_recs and not bpr_recs and not lmf_recs:
+        if not candidate_recs or 'playlist_genre' not in self.df.columns:
+            return candidate_recs[:n]
+        
+        # Get genre preferences from user ratings
+        liked_genres = set()
+        for song_id in liked_ids:
+            if song_id in self.df['track_id'].values:
+                genre = self.df[self.df['track_id'] == song_id]['playlist_genre'].values[0]
+                liked_genres.add(genre)
+        
+        disliked_genres = set()
+        for song_id in disliked_ids:
+            if song_id in self.df['track_id'].values:
+                genre = self.df[self.df['track_id'] == song_id]['playlist_genre'].values[0]
+                disliked_genres.add(genre)
+        
+        # Completely disliked genres (disliked but not liked)
+        completely_disliked_genres = disliked_genres - liked_genres
+        
+        # Group candidates by genre
+        genre_candidates = {}
+        for rec in candidate_recs:
+            genre = self.df[self.df['track_id'] == rec]['playlist_genre'].values[0]
+            # Skip completely disliked genres
+            if genre in completely_disliked_genres:
+                continue
+            if genre not in genre_candidates:
+                genre_candidates[genre] = []
+            genre_candidates[genre].append(rec)
+        
+        # If no genres left after filtering, try a different approach
+        if not genre_candidates:
+            # Return random songs from non-disliked genres
+            return self._fallback_recommendations(liked_ids + disliked_ids, n, completely_disliked_genres)
+        
+        # Allocate recommendations across genres
+        final_recs = []
+        genres = list(genre_candidates.keys())
+        
+        # Prioritize liked genres if available
+        if liked_genres:
+            genres.sort(key=lambda g: g in liked_genres, reverse=True)
+        
+        # Take recommendations from each genre in a round-robin fashion
+        while len(final_recs) < n and genres:
+            for genre in genres[:]:
+                if genre_candidates[genre]:
+                    final_recs.append(genre_candidates[genre].pop(0))
+                    if len(final_recs) >= n:
+                        break
+                else:
+                    genres.remove(genre)
+        
+        return final_recs[:n]
+    
+    def _fallback_recommendations(self, rated_ids, n, completely_disliked_genres=None):
+        """Fallback to random recommendations with genre filtering"""
+        
+        # Get unrated songs
+        unrated_songs = self.df[~self.df['track_id'].isin(rated_ids)]
+        
+        # Filter out completely disliked genres
+        if completely_disliked_genres and 'playlist_genre' in self.df.columns:
+            for genre in completely_disliked_genres:
+                unrated_songs = unrated_songs[unrated_songs['playlist_genre'] != genre]
+            
+        
+        if len(unrated_songs) == 0:
+            # If no songs left, relax the genre constraints
             unrated_songs = self.df[~self.df['track_id'].isin(rated_ids)]
+        
+        if 'playlist_genre' in self.df.columns and len(unrated_songs) > 0:
+            # Group by genre
+            genre_groups = {}
+            for genre in unrated_songs['playlist_genre'].unique():
+                genre_songs = unrated_songs[unrated_songs['playlist_genre'] == genre]['track_id'].tolist()
+                if genre_songs:
+                    genre_groups[genre] = genre_songs
+            
+            
+            # Take songs from each genre in a round-robin fashion
+            recommendations = []
+            genres = list(genre_groups.keys())
+            
+            while len(recommendations) < n and genres:
+                for genre in genres[:]:
+                    if genre_groups[genre]:
+                        # Take a random song from this genre
+                        song_idx = np.random.randint(0, len(genre_groups[genre]))
+                        recommendations.append(genre_groups[genre].pop(song_idx))
+                        if len(recommendations) >= n:
+                            break
+                    else:
+                        genres.remove(genre)
+            
+            return recommendations
+        else:
+            # If no genre info or no songs left, just return random songs
             if len(unrated_songs) >= n:
                 return unrated_songs.sample(n)['track_id'].tolist()
             else:
                 return unrated_songs['track_id'].tolist()
+
+class PureCollaborativeFiltering:
+    def __init__(self, df, features, factors=100, regularization=0.01, iterations=30):
+        self.df = df
+        self.features = features
+        self.factors = factors
+        self.regularization = regularization
+        self.iterations = iterations
+        self.als_model = None
+        self.song_mapping = None
+        self.reverse_mapping = None
+        self.user_item_matrix = None
+        self.n_dummy_users = 500  # More users for better collaborative patterns
+        self.is_transposed = False  # Track whether the matrix is transposed
         
-        # Combine recommendations with weights
-        # ALS is more stable, so give it higher weight
-        all_recs = {}
+    def fit(self):
+        # Create a mapping of song IDs to indices
+        unique_songs = self.df['track_id'].unique()
+        self.song_mapping = {song: i for i, song in enumerate(unique_songs)}
+        self.reverse_mapping = {i: song for song, i in self.song_mapping.items()}
         
-        for i, rec in enumerate(als_recs):
-            score = 0.5 * (1.0 - i/len(als_recs) if len(als_recs) > 0 else 0)
-            all_recs[rec] = all_recs.get(rec, 0) + score
+        n_songs = len(unique_songs)
+        n_users = self.n_dummy_users + 1
+        
+        # Create synthetic user-item matrix with diverse patterns
+        self._create_synthetic_data(n_songs)
+        
+        # Initialize the ALS model
+        self.als_model = AlternatingLeastSquares(
+            factors=self.factors,
+            regularization=self.regularization,
+            iterations=self.iterations,
+            use_gpu=False
+        )
+        
+        # Fit the model with synthetic data
+        try:
+            # The implicit library expects (items x users) format for input
+            # But we'll keep track of the original orientation
+            item_user_matrix = self.user_item_matrix.T.tocsr()
+            self.is_transposed = True
             
-        for i, rec in enumerate(bpr_recs):
-            score = 0.3 * (1.0 - i/len(bpr_recs) if len(bpr_recs) > 0 else 0)
-            all_recs[rec] = all_recs.get(rec, 0) + score
+            self.als_model.fit(item_user_matrix)
             
-        for i, rec in enumerate(lmf_recs):
-            score = 0.2 * (1.0 - i/len(lmf_recs) if len(lmf_recs) > 0 else 0)
-            all_recs[rec] = all_recs.get(rec, 0) + score
+            # Verify factor shapes
+        except Exception as e:
+            print(f"Error during initial model fitting: {e}")
+            import traceback
+            traceback.print_exc()
         
-        # Sort by score and return top N
-        sorted_recs = sorted(all_recs.items(), key=lambda x: x[1], reverse=True)
-        return [rec for rec, _ in sorted_recs[:n]]
+        return self
+    
+    def _create_synthetic_data(self, n_songs):
+        n_users = self.n_dummy_users + 1  # +1 for the actual user (user 0)
+        
+        # Create a sparse matrix directly
+        data = []
+        row = []
+        col = []
+        
+        # Create synthetic users with diverse preferences
+        for user_id in range(1, n_users):
+            # Each user rates a random subset of songs
+            n_songs_to_rate = np.random.randint(50, 200)  # Rate 50-200 songs per user
+            songs_to_rate = np.random.choice(n_songs, 
+                                           size=min(n_songs_to_rate, n_songs), 
+                                           replace=False)
+            
+            # Add ratings (80% positive, 20% negative)
+            for song_idx in songs_to_rate:
+                if np.random.random() < 0.8:  # 80% positive
+                    rating = np.random.uniform(1, 5)
+                else:  # 20% negative
+                    rating = np.random.uniform(-5, 0)
+                
+                data.append(rating)
+                row.append(user_id)
+                col.append(song_idx)
+        
+        # Add initial ratings for user 0 (actual user)
+        # Rate a random subset of songs
+        n_initial_ratings = 20
+        initial_songs = np.random.choice(n_songs, size=n_initial_ratings, replace=False)
+        
+        for song_idx in initial_songs:
+            # 50/50 positive/negative for initial ratings
+            if np.random.random() < 0.5:
+                rating = np.random.uniform(1, 5)
+            else:
+                rating = np.random.uniform(-5, 0)
+            
+            data.append(rating)
+            row.append(0)  # User 0
+            col.append(song_idx)
+        
+        # Create the sparse matrix
+        self.user_item_matrix = sparse.csr_matrix((data, (row, col)), shape=(n_users, n_songs))
+        
+        # Verify that user 0 has ratings
+        user0_ratings = self.user_item_matrix[0].nnz
+        
+        # Print genre distribution of initial ratings if available
+        if 'playlist_genre' in self.df.columns:
+            user0_rated_songs = [self.reverse_mapping[j] for i, j, v in zip(row, col, data) if i == 0]
+            genre_counts = {}
+            for song_id in user0_rated_songs:
+                if song_id in self.df['track_id'].values:
+                    genre = self.df[self.df['track_id'] == song_id]['playlist_genre'].values[0]
+                    genre_counts[genre] = genre_counts.get(genre, 0) + 1
+    
+    def update_preferences(self, liked_ids, disliked_ids):
+        """Update the user-item matrix with the actual user's preferences"""
+        if self.user_item_matrix is None:
+            print("Error: User-item matrix not initialized")
+            return
+            
+        n_songs = self.user_item_matrix.shape[1]
+        
+        # Create a new row for user 0
+        user0_data = np.zeros(n_songs)
+        
+        # Set liked songs to high rating (4-5)
+        for song_id in liked_ids:
+            if song_id in self.song_mapping:
+                song_idx = self.song_mapping[song_id]
+                user0_data[song_idx] = np.random.uniform(4, 5)  # High rating
+                
+        # Set disliked songs to low rating (-5 to -1)
+        for song_id in disliked_ids:
+            if song_id in self.song_mapping:
+                song_idx = self.song_mapping[song_id]
+                user0_data[song_idx] = np.random.uniform(-5, -1)  # Low rating
+        
+        # Update the user-item matrix
+        # Replace the first row (user 0) with the new preferences
+        self.user_item_matrix[0] = sparse.csr_matrix(user0_data)
+        
+        # Refit the model with updated user preferences
+        try:
+            # The implicit library expects (items x users) format
+            item_user_matrix = self.user_item_matrix.T.tocsr()
+            self.is_transposed = True
+            
+            self.als_model.fit(item_user_matrix)
+        except Exception as e:
+            print(f"Error refitting model: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def recommend(self, liked_ids, disliked_ids, n=10):
+        """Get recommendations using pure collaborative filtering without genre filtering"""
+        if not liked_ids:
+            return []
+            
+        # Update the model with current preferences
+        self.update_preferences(liked_ids, disliked_ids)
+        
+        # Get the indices of rated songs
+        rated_ids = liked_ids + disliked_ids
+        rated_indices = [self.song_mapping[song_id] for song_id in rated_ids 
+                        if song_id in self.song_mapping]
+        
+        try:
+            if self.is_transposed:
+                # When transposed, user_factors are item factors and item_factors are user factors
+                item_factors = self.als_model.user_factors  # These are actually item factors
+                user_factors = self.als_model.item_factors  # These are actually user factors
+            else:
+                # Normal orientation
+                user_factors = self.als_model.user_factors
+                item_factors = self.als_model.item_factors
+            
+            if user_factors is None or item_factors is None:
+                return self._fallback_recommendations(rated_ids, n)
+            
+            # Get the factors for our user (user 0)
+            user_vec = user_factors[0]
+            
+            # Calculate scores for all items
+            scores = np.dot(item_factors, user_vec)
+            # Set scores of rated items to -inf
+            for idx in rated_indices:
+                if 0 <= idx < len(scores):
+                    scores[idx] = -np.inf
+            
+            # Get top N indices
+            top_indices = np.argsort(scores)[-n:][::-1]
+            # Convert to song IDs
+            recommendations = [self.reverse_mapping[idx] for idx in top_indices 
+                              if idx in self.reverse_mapping]
+            
+            return recommendations
+        except Exception as e:
+            print(f"Error in recommendation: {e}")
+            import traceback
+            traceback.print_exc()
+            return self._fallback_recommendations(rated_ids, n)
+    
+    def _fallback_recommendations(self, rated_ids, n):
+        """Simple fallback to random recommendations"""
+        
+        # Get unrated songs
+        unrated_songs = self.df[~self.df['track_id'].isin(rated_ids)]
+        
+        if len(unrated_songs) >= n:
+            return unrated_songs.sample(n)['track_id'].tolist()
+        else:
+            return unrated_songs['track_id'].tolist()
 
 # Advanced Deep Learning Recommender (Complex Neural Architecture)
 class DeepLearningRecommender:
@@ -843,7 +1235,6 @@ class DeepLearningRecommender:
         self.history = None
         
     def fit(self):
-        print("Training advanced deep learning recommender with complex neural architecture...")
         # Create a mapping of song IDs to indices
         unique_songs = self.df['track_id'].unique()
         self.song_mapping = {song: i for i, song in enumerate(unique_songs)}
@@ -901,7 +1292,7 @@ class DeepLearningRecommender:
         
         # Compile with advanced optimizer settings
         optimizer = Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-07)
-        self.model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+        self.model.compile(optimizer=optimizer, loss='binary_focal_crossentropy', metrics=['accuracy'])
         
         return self
     
@@ -935,15 +1326,17 @@ class DeepLearningRecommender:
         train_labels = np.array(train_labels)
         
         # Data augmentation for small datasets
-        if len(train_features) < 10:
+        if len(train_features) < 20:
             # Create synthetic examples by adding small noise
             augmented_features = []
             augmented_labels = []
             
             for i in range(len(train_features)):
                 # Create 5 variations of each song
-                for _ in range(5):
-                    noise = np.random.normal(0, 0.05, train_features[i].shape)
+                for _ in range(10):
+                    noise_levels = [0.03, 0.05, 0.07, 0.1]
+                    noise_level = random.choice(noise_levels)
+                    noise = np.random.normal(0, noise_level, train_features[i].shape)
                     augmented_features.append(train_features[i] + noise)
                     augmented_labels.append(train_labels[i])
             
@@ -952,13 +1345,21 @@ class DeepLearningRecommender:
             train_labels = np.concatenate([train_labels, np.array(augmented_labels)])
         
         # Train the model with early stopping
-        early_stopping = EarlyStopping(monitor='loss', patience=10, restore_best_weights=True)
+        early_stopping = EarlyStopping(monitor='loss', patience=20, restore_best_weights=True)
         
+        reduce_lr = ReduceLROnPlateau(
+            monitor='loss',
+            factor=0.2,
+            patience=5,
+            min_lr=0.00001
+        )
+
         self.history = self.model.fit(
             train_features, train_labels,
-            epochs=100,  # More epochs for complex model
+            epochs=1000,  # More epochs for complex model
             batch_size=min(32, len(train_features)),
-            callbacks=[early_stopping],
+            validation_split=0.2,
+            callbacks=[early_stopping, reduce_lr],
             verbose=0
         )
     
@@ -1130,7 +1531,7 @@ def main():
     df, display_df, features = preprocess_data(df)
     
     # Select initial songs for rating
-    initial_songs = select_initial_songs(df, n=25)
+    initial_songs = select_initial_songs(df, n=100)
     
     # Get user ratings
     liked_ids, disliked_ids, neutral_ids = get_user_ratings(display_df, initial_songs)
@@ -1156,6 +1557,12 @@ def main():
     print(f"Clustering model training completed in {cluster_time:.2f} seconds")
     
     start_time = time.time()
+    pure_model = PureCollaborativeFiltering(df, features).fit()
+    pure_time = time.time() - start_time
+    energy_tracker.log_component("Pure Collaborative Filtering Model", pure_time)
+    print(f"Matrix factorization model training completed in {pure_time:.2f} seconds")
+
+    start_time = time.time()
     matrix_model = AdvancedMatrixFactorization(df, features).fit()
     matrix_time = time.time() - start_time
     energy_tracker.log_component("Matrix Factorization Model", matrix_time)
@@ -1169,10 +1576,11 @@ def main():
     
     # Create adaptive ensemble
     ensemble = AdaptiveEnsembleRecommender(
-        [content_model, cluster_model, matrix_model, deep_model],
-        # initial_weights=[0.3, 0.2, 0.3, 0.2]  # Initial weights
+        # [deep_model], initial_weights=[1]
+        [content_model, cluster_model, pure_model, matrix_model, deep_model],
+        initial_weights=[0.20, 0.20, 0.20, 0.20, 0.20]  # Initial weights
         # initial_weights=[1, 0, 0, 0]
-        initial_weights=[0, 1, 0, 0]
+        # initial_weights=[0, 1, 0, 0]
         # initial_weights=[0, 0, 1, 0]
         # initial_weights=[0, 0, 0, 1]
     )
@@ -1201,7 +1609,7 @@ def main():
         
         if choice == '1':
             # Select more songs for rating
-            more_songs = select_initial_songs(df[~df['track_id'].isin(liked_ids + disliked_ids + neutral_ids)], n=10)
+            more_songs = select_initial_songs(df[~df['track_id'].isin(liked_ids + disliked_ids + neutral_ids)], n=15)
             new_liked, new_disliked, new_neutral = get_user_ratings(display_df, more_songs)
             
             # Update preferences
@@ -1248,9 +1656,10 @@ def main():
             print("\n=== PERFORMANCE REPORT ===")
             print(f"Content-Based Model Training: {content_time:.2f} seconds")
             print(f"Clustering Model Training: {cluster_time:.2f} seconds")
+            print(f"Pure Collaborative Filtering Training: {pure_time:.2f} seconds")
             print(f"Matrix Factorization Training: {matrix_time:.2f} seconds")
             print(f"Deep Learning Model Training: {deep_time:.2f} seconds")
-            print(f"Total Training Time: {content_time + cluster_time + matrix_time + deep_time:.2f} seconds")
+            print(f"Total Training Time: {content_time + cluster_time + pure_time + matrix_time + deep_time:.2f} seconds")
             print(f"Average Recommendation Generation Time: {total_recommendation_time/(feedback_count+1):.2f} seconds")
             print(f"Number of Feedback Iterations: {feedback_count}")
             

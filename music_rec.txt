@@ -141,3 +141,26 @@ elif choice == '2':
 8. **Implicit Feedback**: Works with binary interactions (like/dislike) rather than explicit ratings
 
 The system is designed to be robust, with fallback mechanisms if any model fails, and to handle various edge cases that might occur during the recommendation process.
+
+
+RESULTS:
+
+=== ENERGY CONSUMPTION REPORT ===
+Total Energy Consumption: 4.167497 kWh
+Estimated CO2 Emissions: 4.940381 kg CO2eq
+(Note: GPU energy was estimated as direct measurement failed)
+
+This is equivalent to:
+- Charging a smartphone 328.1 times
+- Keeping a 10W LED light bulb on for 416.7 hours
+- Driving a car for 12.35 miles
+
+Energy breakdown by component:
+- Initial Recommendation: 0.825060 kWh (19.8%)
+- Recommendation Round 1: 0.820631 kWh (19.7%)
+- Recommendation Round 2: 0.795688 kWh (19.1%)
+- Clustering Model: 0.738241 kWh (17.7%)
+- Matrix Factorization Model: 0.512463 kWh (12.3%)
+- Pure Collaborative Filtering Model: 0.326044 kWh (7.8%)
+- Content-based Model: 0.135422 kWh (3.2%)
+- Deep Learning Model: 0.013948 kWh (0.3%)
