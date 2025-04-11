@@ -1,0 +1,53 @@
+
+
+Same ML strategies as the Music System used.
+
+=== ENERGY CONSUMPTION REPORT ===
+Total Energy Consumption: 0.805243 kWh
+Estimated CO2 Emissions: 1.281048 kg CO2eq
+(Note: GPU energy was estimated as direct measurement failed)
+
+This is equivalent to:
+- Charging a smartphone 63.4 times
+- Keeping a 10W LED light bulb on for 80.5 hours
+- Driving a car for 3.20 miles
+
+Energy breakdown by component:
+- Initial Recommendation: 0.158060 kWh (19.6%)
+- Recommendation Round 2: 0.153081 kWh (19.0%)
+- Recommendation Round 1: 0.152621 kWh (19.0%)
+- Clustering Model: 0.140581 kWh (17.5%)
+- Pure Collaborative Filtering Model: 0.095703 kWh (11.9%)
+- Matrix Factorization Model: 0.091436 kWh (11.4%)
+- Deep Learning Model: 0.010604 kWh (1.3%)
+- Content-based Model: 0.003156 kWh (0.4%)
+
+
+=== ENERGY CONSUMPTION REPORT ===
+Total Energy Consumption: 0.761052 kWh
+Estimated CO2 Emissions: 2.153425 kg CO2eq
+(Note: GPU energy was estimated as direct measurement failed)
+
+This is equivalent to:
+- Charging a smartphone 59.9 times
+- Keeping a 10W LED light bulb on for 76.1 hours
+- Driving a car for 5.38 miles
+
+Energy breakdown by component:
+- Full Ensemble Recommendations: 0.146095 kWh (19.2%)
+- Full Ensemble Round 1: 0.140810 kWh (18.5%)
+- Clustering Model: 0.135232 kWh (17.8%)
+- Full Ensemble Round 2: 0.135111 kWh (17.8%)
+- Pure Collaborative Filtering Model: 0.097169 kWh (12.8%)
+- Matrix Factorization Model: 0.089176 kWh (11.7%)
+- Deep Learning Model: 0.010811 kWh (1.4%)
+- Content-based Model: 0.003079 kWh (0.4%)
+- Pruned ML Recommendations: 0.001201 kWh (0.2%)
+- Pruned ML Round 1: 0.000931 kWh (0.1%)
+- Pruned ML Round 2: 0.000927 kWh (0.1%)
+- Genre-Based Round 2: 0.000164 kWh (0.0%)
+- Genre-Based Round 1: 0.000137 kWh (0.0%)
+- Genre-Based Recommendations: 0.000125 kWh (0.0%)
+- Popularity-Based Recommendations: 0.000030 kWh (0.0%)
+- Popularity-Based Round 1: 0.000028 kWh (0.0%)
+- Popularity-Based Round 2: 0.000027 kWh (0.0%)

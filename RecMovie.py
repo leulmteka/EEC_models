@@ -31,205 +31,356 @@ ENERGY_TRACKING_AVAILABLE = False
 # except ImportError:
     # ENERGY_TRACKING_AVAILABLE = False
 
-# Download dataset if not already downloaded
 def download_dataset():
-    dataset_path = kagglehub.dataset_download("joebeachcapital/30000-spotify-songs")
-    return dataset_path
+    """Download the movies dataset and return the path"""
+    print("Downloading movies dataset...")
+    try:
+        # Download the dataset
+        dataset_path = kagglehub.dataset_download("utkarshx27/movies-dataset")
+        print(f"Dataset downloaded to: {dataset_path}")
+        return dataset_path
+    except Exception as e:
+        print(f"Error downloading dataset: {e}")
+        print("Trying alternative approach...")
+        
+        # Check if file exists locally
+        if os.path.exists("movies.csv"):
+            print("Found dataset locally.")
+            return ""
+        else:
+            print("Please download the dataset manually from Kaggle:")
+            print("https://www.kaggle.com/datasets/utkarshx27/movies-dataset")
+            print("Save the movies.csv file in the current directory.")
+            exit(1)
 
-# Load the dataset
 def load_data(dataset_path=""):
-    # Try different possible file paths
+    """Load the movies dataset from various possible locations"""
+    print("Loading movies dataset...")
+    
+    # List all possible file paths
     possible_paths = [
-        os.path.join(dataset_path, "spotify_songs.csv"),
-        "spotify_songs.csv",
-        os.path.join(dataset_path, "30000-spotify-songs", "spotify_songs.csv"),
-        "30000-spotify-songs/spotify_songs.csv"
+        # Direct paths
+        "movies.csv",
+        "movies-dataset/movies.csv",
+        
+        # With dataset_path
+        os.path.join(dataset_path, "movies.csv"),
+        
+        # Nested paths
+        os.path.join(dataset_path, "movies-dataset", "movies.csv"),
+        
+        # Kaggle structure paths
+        os.path.join(dataset_path, "utkarshx27", "movies-dataset", "movies.csv")
     ]
     
+    # Try to find the file
     for path in possible_paths:
+        print(f"Trying path: {path}")
         if os.path.exists(path):
+            print(f"Loading from: {path}")
             df = pd.read_csv(path)
+            print(f"Loaded {len(df)} movies")
             return df
     
     # If we get here, we couldn't find the file
-    raise FileNotFoundError("Could not find spotify_songs.csv. Please download it manually.")
+    # Let's try to locate the file by searching
+    print("Searching for movies.csv in downloaded directory...")
+    
+    if dataset_path and os.path.exists(dataset_path):
+        for root, dirs, files in os.walk(dataset_path):
+            if "movies.csv" in files:
+                file_path = os.path.join(root, "movies.csv")
+                print(f"Found at: {file_path}")
+                df = pd.read_csv(file_path)
+                print(f"Loaded {len(df)} movies")
+                return df
+    
+    # Last resort: try to find any CSV file that might contain movie data
+    if dataset_path and os.path.exists(dataset_path):
+        for root, dirs, files in os.walk(dataset_path):
+            for file in files:
+                if file.endswith(".csv"):
+                    file_path = os.path.join(root, file)
+                    print(f"Found CSV file: {file_path}")
+                    try:
+                        df = pd.read_csv(file_path)
+                        # Check if this looks like a movie dataset
+                        if 'title' in df.columns and len(df) > 100:
+                            print(f"Loaded {len(df)} movies from {file_path}")
+                            return df
+                    except:
+                        pass
+    
+    raise FileNotFoundError("Could not find movies.csv. Please download it manually.")
 
-# Preprocess the data with enhanced feature engineering
-# Preprocess the data with enhanced feature engineering and null removal
 def preprocess_data(df):
+    print("Preprocessing movie data...")
+    
     # Count initial rows
     initial_rows = len(df)
     
-    # Remove rows with null values instead of filling them
-    null_counts = df.isnull().sum()
+    # Remove rows with null values in critical columns
+    critical_columns = ['id', 'title']
+    critical_columns = [col for col in critical_columns if col in df.columns]
+    df = df.dropna(subset=critical_columns)
     
-    # Drop rows with any null values
-    df = df.dropna()
+    print(f"Initial dataset size: {initial_rows} rows")
+    print(f"After removing critical nulls: {len(df)} rows (removed {initial_rows - len(df)} rows)")
     
-    # Extract relevant features for content-based filtering
-    base_features = ['acousticness', 'danceability', 'energy', 'instrumentalness', 
-                'liveness', 'loudness', 'speechiness', 'tempo', 'valence', 'duration_ms', 'popularity']
+    # Print column names to help diagnose issues
+    print(f"Available columns: {df.columns.tolist()}")
     
-    # Ensure all base features exist in the dataframe
+    # Check the format of the genres column
+    if 'genres' in df.columns:
+        print("Sample of genres column:")
+        print(df['genres'].head().tolist())
+        
+        # Check if genres is already a list
+        if isinstance(df['genres'].iloc[0], list):
+            print("Genres already in list format")
+        elif isinstance(df['genres'].iloc[0], str):
+            # Try different parsing approaches
+            try:
+                # Try to parse as JSON
+                import json
+                df['genres'] = df['genres'].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
+                print("Parsed genres as JSON")
+            except:
+                try:
+                    # Try to parse using eval with safety checks
+                    df['genres'] = df['genres'].apply(lambda x: 
+                        eval(x) if isinstance(x, str) and (x.startswith('[') or x.startswith('{')) else 
+                        [{"name": g.strip()} for g in x.split()] if isinstance(x, str) else 
+                        x)
+                    print("Parsed genres using eval")
+                except:
+                    # If all parsing fails, treat as simple string
+                    print("Treating genres as simple strings")
+                    df['genres'] = df['genres'].apply(lambda x: 
+                        [{"name": g.strip()} for g in x.split()] if isinstance(x, str) else 
+                        [{"name": "Unknown"}])
+    else:
+        print("Warning: 'genres' column not found")
+        # Create a placeholder genres column
+        df['genres'] = [[{"name": "Unknown"}]] * len(df)
+    
+    # Extract genre names safely
+    df['genre_names'] = df['genres'].apply(
+        lambda x: [genre.get('name', '') for genre in x] if isinstance(x, list) else 
+                 [x.get('name', '')] if isinstance(x, dict) else 
+                 x.split() if isinstance(x, str) else 
+                 ['Unknown']
+    )
+    
+    # Print sample of extracted genres
+    print("Sample of extracted genre names:")
+    print(df['genre_names'].head().tolist())
+    
+    # Create genre dummies
+    all_genres = set()
+    for genres in df['genre_names']:
+        if isinstance(genres, list):
+            all_genres.update([g for g in genres if g])
+    
+    print(f"Found {len(all_genres)} unique genres")
+    
+    for genre in all_genres:
+        if genre:  # Skip empty genre names
+            df[f'genre_{genre}'] = df['genre_names'].apply(
+                lambda x: 1 if genre in x else 0
+            )
+    
+    # Extract relevant numerical features
+    base_features = ['vote_average', 'vote_count', 'popularity', 'runtime']
     existing_features = [f for f in base_features if f in df.columns]
     
+    print(f"Using numerical features: {existing_features}")
+    
+    # Handle missing values in numerical features
+    for feature in existing_features:
+        df[feature] = df[feature].fillna(df[feature].median())
+    
     # Normalize numerical features
-    scaler = StandardScaler()
-    df[existing_features] = scaler.fit_transform(df[existing_features])
+    if existing_features:
+        scaler = StandardScaler()
+        df[existing_features] = scaler.fit_transform(df[existing_features])
+        
+        # Feature engineering - create polynomial features
+        poly = PolynomialFeatures(degree=2, include_bias=False)
+        poly_features = poly.fit_transform(df[existing_features])
+        
+        # Create feature names for polynomial features
+        poly_feature_names = []
+        for i, feat1 in enumerate(existing_features):
+            for feat2 in existing_features[i:]:
+                poly_feature_names.append(f"{feat1}_{feat2}")
+        
+        # Truncate to match actual number of features created
+        poly_feature_names = poly_feature_names[:poly_features.shape[1] - len(existing_features)]
+        
+        # Add polynomial features to dataframe
+        for i, name in enumerate(poly_feature_names):
+            df[name] = poly_features[:, len(existing_features) + i]
+    else:
+        poly_feature_names = []
     
-    # Feature engineering - create polynomial features for more complex relationships
-    poly = PolynomialFeatures(degree=2, include_bias=False)
-    poly_features = poly.fit_transform(df[existing_features])
-    
-    # Create feature names for polynomial features
-    poly_feature_names = []
-    for i, feat1 in enumerate(existing_features):
-        for feat2 in existing_features[i:]:
-            poly_feature_names.append(f"{feat1}_{feat2}")
-    
-    # Truncate to match actual number of features created
-    poly_feature_names = poly_feature_names[:poly_features.shape[1] - len(existing_features)]
-    
-    # Add polynomial features to dataframe
-    for i, name in enumerate(poly_feature_names):
-        df[name] = poly_features[:, len(existing_features) + i]
-    
-    # Create additional features
-    if 'track_popularity' in df.columns:
-        df['popularity_scaled'] = MinMaxScaler().fit_transform(df[['track_popularity']])
-    
-    # Create genre and artist embeddings if possible
-    if 'playlist_genre' in df.columns:
-        genre_dummies = pd.get_dummies(df['playlist_genre'], prefix='genre')
-        df = pd.concat([df, genre_dummies], axis=1)
+    # Add release year as a feature
+    if 'release_date' in df.columns:
+        try:
+            df['release_year'] = pd.to_datetime(df['release_date'], errors='coerce').dt.year
+            df['release_year'] = df['release_year'].fillna(df['release_year'].median())
+            df['release_year_scaled'] = StandardScaler().fit_transform(df[['release_year']])
+            existing_features.append('release_year_scaled')
+        except:
+            print("Warning: Could not parse release_date")
     
     # Create a clean version for display
-    display_columns = ['track_id', 'track_name', 'track_artist', 'track_album_name', 
-                     'playlist_genre', 'playlist_subgenre']
+    display_columns = ['id', 'title', 'genre_names']
+    if 'release_date' in df.columns:
+        display_columns.append('release_date')
+    if 'vote_average' in df.columns:
+        display_columns.append('vote_average')
+    if 'vote_count' in df.columns:
+        display_columns.append('vote_count')
+    
     available_display_columns = [col for col in display_columns if col in df.columns]
     
     display_df = df[available_display_columns].copy()
     
-    # Combine original and engineered features
-    all_features = existing_features + poly_feature_names
-    if 'popularity_scaled' in df.columns:
-        all_features.append('popularity_scaled')
-    
-    # Add genre features if they exist
+    # Combine all features
     genre_features = [col for col in df.columns if col.startswith('genre_')]
-    all_features.extend(genre_features)
+    all_features = existing_features + poly_feature_names + genre_features
+    
+    print(f"Created {len(all_features)} features through feature engineering")
+    print(f"Genre features: {len(genre_features)}")
+    
+    # Use movie ID as track_id for compatibility with existing code
+    if 'id' in df.columns:
+        df['track_id'] = df['id']
+        display_df['track_id'] = df['id']
+    else:
+        # Create a sequential ID if 'id' column doesn't exist
+        df['track_id'] = range(len(df))
+        display_df['track_id'] = range(len(df))
+    
+    # Add placeholder columns for compatibility with existing code
+    display_df['track_name'] = df['title'] if 'title' in df.columns else 'Unknown'
+    display_df['track_artist'] = df['director'] if 'director' in df.columns else 'Unknown'
+    display_df['track_album_name'] = 'Movie'
+    
+    # Safely extract primary and secondary genres
+    def get_primary_genre(genres):
+        if isinstance(genres, list) and len(genres) > 0:
+            return genres[0]
+        return 'Unknown'
+        
+    def get_secondary_genre(genres):
+        if isinstance(genres, list) and len(genres) > 1:
+            return genres[1]
+        elif isinstance(genres, list) and len(genres) > 0:
+            return genres[0]
+        return 'Unknown'
+    
+    display_df['playlist_genre'] = df['genre_names'].apply(get_primary_genre)
+    display_df['playlist_subgenre'] = df['genre_names'].apply(get_secondary_genre)
     
     return df, display_df, all_features
 
-# Select diverse songs for initial rating with enhanced diversity algorithm
-def select_initial_songs(df, n=25):
+def select_initial_movies(df, n=25):
+    print(f"Selecting {n} diverse movies for initial rating...")
     
-    # Ensure we get a mix of genres and popularity
-    if 'playlist_genre' in df.columns:
-        genres = df['playlist_genre'].unique()
-        
-        # Calculate genre distribution for balanced sampling
-        genre_counts = df['playlist_genre'].value_counts(normalize=True)
-        
-        # Calculate songs per genre proportionally
-        songs_per_genre = {genre: max(1, int(n * genre_counts[genre])) for genre in genres}
-        
-        # Adjust to ensure we get exactly n songs
-        total = sum(songs_per_genre.values())
-        if total < n:
-            # Add remaining to largest genres
-            for genre in genre_counts.index:
-                if total >= n:
-                    break
-                songs_per_genre[genre] += 1
-                total += 1
-        elif total > n:
-            # Remove from smallest genres
-            for genre in genre_counts.index[::-1]:
-                if total <= n:
-                    break
-                if songs_per_genre[genre] > 1:
-                    songs_per_genre[genre] -= 1
-                    total -= 1
-        
-        selected_songs = []
-        
-        # Use K-means clustering within each genre to ensure diversity
-        for genre in genres:
-            genre_df = df[df['playlist_genre'] == genre]
-            if len(genre_df) <= songs_per_genre[genre]:
-                # If we have fewer songs than needed, take all
-                selected_songs.extend(genre_df['track_id'].tolist())
-                continue
-                
-            # Select features for clustering
-            if 'acousticness' in df.columns and 'energy' in df.columns:
-                features_for_clustering = ['acousticness', 'danceability', 'energy', 'tempo']
-                features_for_clustering = [f for f in features_for_clustering if f in genre_df.columns]
-                
-                if not features_for_clustering:
-                    # Fallback if no audio features available
-                    selected_songs.extend(genre_df.sample(songs_per_genre[genre])['track_id'].tolist())
-                    continue
-                
-                # Cluster songs within genre
-                n_clusters = min(songs_per_genre[genre], len(genre_df))
-                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-                
-                try:
-                    clusters = kmeans.fit_predict(genre_df[features_for_clustering])
-                    genre_df['cluster'] = clusters
-                    
-                    # Select one song from each cluster
-                    for cluster in range(n_clusters):
-                        cluster_songs = genre_df[genre_df['cluster'] == cluster]
-                        if len(cluster_songs) > 0:
-                            selected_songs.append(cluster_songs.sample(1)['track_id'].iloc[0])
-                except:
-                    # Fallback if clustering fails
-                    selected_songs.extend(genre_df.sample(songs_per_genre[genre])['track_id'].tolist())
-            else:
-                # Fallback if no audio features available
-                selected_songs.extend(genre_df.sample(songs_per_genre[genre])['track_id'].tolist())
-    else:
-        # If no genre information, use clustering on the whole dataset
-        if len(df) <= n:
-            return df['track_id'].tolist()
+    # Get unique genres
+    all_genres = set()
+    for genres in df['genre_names']:
+        if isinstance(genres, list):
+            all_genres.update(genres)
+    
+    # Remove any empty strings
+    all_genres = {genre for genre in all_genres if genre}
+    
+    print(f"Found {len(all_genres)} unique genres")
+    
+    # Calculate how many movies to select per genre
+    movies_per_genre = max(1, n // len(all_genres))
+    print(f"Selecting approximately {movies_per_genre} movies per genre")
+    
+    selected_movies = set()  # Use a set to prevent duplicates
+    
+    # Select movies from each genre
+    for genre in all_genres:
+        if len(selected_movies) >= n:
+            break
             
-        # Select features for clustering
-        features_for_clustering = [col for col in ['acousticness', 'danceability', 'energy', 'tempo'] 
-                                  if col in df.columns]
+        # Get movies with this genre
+        genre_movies = df[df[f'genre_{genre}'] == 1]
         
-        if not features_for_clustering:
-            # Random selection if no suitable features
-            return df.sample(n)['track_id'].tolist()
+        if len(genre_movies) == 0:
+            continue
         
-        # Cluster all songs
-        kmeans = KMeans(n_clusters=n, random_state=42, n_init=10)
-        clusters = kmeans.fit_predict(df[features_for_clustering])
-        df['cluster'] = clusters
+        # Filter out already selected movies
+        genre_movies = genre_movies[~genre_movies['track_id'].isin(selected_movies)]
         
-        selected_songs = []
-        for cluster in range(n):
-            cluster_songs = df[df['cluster'] == cluster]
-            if len(cluster_songs) > 0:
-                selected_songs.append(cluster_songs.sample(1)['track_id'].iloc[0])
+        if len(genre_movies) == 0:
+            continue
+        
+        # Get a mix of popular and less popular movies
+        try:
+            # Sort by vote count (popularity)
+            sorted_movies = genre_movies.sort_values('vote_count', ascending=False)
+            
+            # Take some popular movies
+            popular_count = min(movies_per_genre // 2, len(sorted_movies))
+            if popular_count > 0:
+                popular = sorted_movies.head(popular_count)
+                selected_movies.update(popular['track_id'].tolist())
+            
+            # Take some less popular movies
+            remaining = sorted_movies.iloc[popular_count:]
+            if len(remaining) > 0:
+                less_popular_count = min(movies_per_genre // 2, len(remaining))
+                if less_popular_count > 0:
+                    less_popular = remaining.sample(less_popular_count)
+                    selected_movies.update(less_popular['track_id'].tolist())
+        except Exception as e:
+            print(f"Error selecting movies for genre {genre}: {e}")
+            # Fallback to random selection
+            sample_size = min(movies_per_genre, len(genre_movies))
+            if sample_size > 0:
+                selected_movies.update(genre_movies.sample(sample_size)['track_id'].tolist())
     
-    # Ensure we have exactly n songs
-    if len(selected_songs) > n:
-        selected_songs = selected_songs[:n]
-    elif len(selected_songs) < n:
-        # Add more random songs if needed
-        remaining = n - len(selected_songs)
-        additional_df = df[~df['track_id'].isin(selected_songs)]
+    # Convert set to list
+    selected_movies = list(selected_movies)
+    
+    # Ensure we have exactly n movies
+    if len(selected_movies) > n:
+        selected_movies = selected_movies[:n]
+    elif len(selected_movies) < n:
+        # Add more random movies if needed
+        remaining = n - len(selected_movies)
+        additional_df = df[~df['track_id'].isin(selected_movies)]
         if len(additional_df) >= remaining:
             additional = additional_df.sample(remaining)['track_id'].tolist()
-            selected_songs.extend(additional)
+            selected_movies.extend(additional)
         else:
-            # If we don't have enough unique songs, just use what we have
-            selected_songs.extend(additional_df['track_id'].tolist())
+            selected_movies.extend(additional_df['track_id'].tolist())
     
-    return selected_songs
+    print(f"Selected {len(selected_movies)} movies for initial rating")
+    
+    # Verify no duplicates
+    if len(selected_movies) != len(set(selected_movies)):
+        print("Warning: Duplicate movies found in selection")
+        # Remove duplicates
+        selected_movies = list(set(selected_movies))
+        
+        # Add more if needed
+        if len(selected_movies) < n:
+            remaining = n - len(selected_movies)
+            additional_df = df[~df['track_id'].isin(selected_movies)]
+            if len(additional_df) >= remaining:
+                additional = additional_df.sample(remaining)['track_id'].tolist()
+                selected_movies.extend(additional)
+    
+    return selected_movies
 
 # Energy measurement and reporting functions
 class EnergyTracker:
@@ -366,27 +517,74 @@ class ContentBasedRecommender:
         self.feature_importance = None
         
     def fit(self):
+        print("Training enhanced content-based recommender with multiple similarity metrics...")
+        
+        # Check for non-numeric features
+        non_numeric_features = []
+        for feature in self.features:
+            if feature in self.df.columns:
+                if not pd.api.types.is_numeric_dtype(self.df[feature]):
+                    non_numeric_features.append(feature)
+        
+        if non_numeric_features:
+            print(f"Warning: Found non-numeric features: {non_numeric_features}")
+            print("These will be excluded from similarity calculation")
+            
+            # Filter out non-numeric features
+            numeric_features = [f for f in self.features if f not in non_numeric_features]
+            if not numeric_features:
+                print("Error: No numeric features available for content-based filtering")
+                # Create a dummy similarity matrix based on IDs
+                n_items = len(self.df)
+                self.similarity_matrix = np.eye(n_items)  # Identity matrix
+                self.rbf_similarity_matrix = np.eye(n_items)  # Identity matrix
+                self.feature_importance = np.ones(1)  # Dummy feature importance
+                return self
+        else:
+            numeric_features = self.features
+        
+        print(f"Using {len(numeric_features)} numeric features for similarity calculation")
+        
+        # Check for NaN values
+        has_nans = self.df[numeric_features].isna().any().any()
+        if has_nans:
+            print("Warning: NaN values found in features. Filling with zeros.")
+            feature_matrix = self.df[numeric_features].fillna(0).values
+        else:
+            feature_matrix = self.df[numeric_features].values
+        
         # Compute similarity matrices using different metrics
-        feature_matrix = self.df[self.features].values
-        
-        # Cosine similarity
-        self.similarity_matrix = cosine_similarity(feature_matrix)
-        
-        # RBF kernel similarity (captures non-linear relationships)
-        self.rbf_similarity_matrix = rbf_kernel(feature_matrix)
-        
-        # Initialize feature importance (will be updated based on user preferences)
-        self.feature_importance = np.ones(len(self.features))
+        try:
+            print(f"Computing cosine similarity matrix of shape {feature_matrix.shape}...")
+            self.similarity_matrix = cosine_similarity(feature_matrix)
+            
+            print(f"Computing RBF kernel similarity matrix...")
+            self.rbf_similarity_matrix = rbf_kernel(feature_matrix)
+            
+            # Initialize feature importance (will be updated based on user preferences)
+            self.feature_importance = np.ones(len(numeric_features))
+            
+            # Store the actual features used
+            self.numeric_features = numeric_features
+            
+            print(f"Similarity matrices computed successfully")
+        except Exception as e:
+            print(f"Error computing similarity matrices: {e}")
+            # Create dummy similarity matrices
+            n_items = len(self.df)
+            self.similarity_matrix = np.eye(n_items)  # Identity matrix
+            self.rbf_similarity_matrix = np.eye(n_items)  # Identity matrix
+            self.feature_importance = np.ones(1)  # Dummy feature importance
         
         return self
     
     def update_feature_importance(self, liked_ids, disliked_ids):
         """Update feature importance based on user preferences"""
-        if not liked_ids or not self.features:
+        if not hasattr(self, 'numeric_features') or not self.numeric_features or not liked_ids:
             return
             
         # Get feature values for liked and disliked songs
-        liked_features = self.df[self.df['track_id'].isin(liked_ids)][self.features].values
+        liked_features = self.df[self.df['track_id'].isin(liked_ids)][self.numeric_features].values
         
         if len(liked_features) == 0:
             return
@@ -402,7 +600,7 @@ class ContentBasedRecommender:
         
         # If we have disliked songs, adjust importance to maximize separation
         if disliked_ids:
-            disliked_features = self.df[self.df['track_id'].isin(disliked_ids)][self.features].values
+            disliked_features = self.df[self.df['track_id'].isin(disliked_ids)][self.numeric_features].values
             
             if len(disliked_features) > 0:
                 # Calculate separation power of each feature (difference between liked and disliked)
@@ -413,7 +611,7 @@ class ContentBasedRecommender:
                 # Combine with existing importance
                 combined_importance = self.feature_importance * separation
                 self.feature_importance = combined_importance / np.sum(combined_importance)
-        
+
     def recommend(self, liked_ids, disliked_ids, n=10):
         if not liked_ids:
             return []
@@ -443,20 +641,24 @@ class ContentBasedRecommender:
         for idx in liked_indices:
             # Weighted combination of similarity metrics
             combined_similarity = (cosine_weight * self.similarity_matrix[idx] + 
-                                  rbf_weight * self.rbf_similarity_matrix[idx])
+                                rbf_weight * self.rbf_similarity_matrix[idx])
             
-            # Apply feature importance weighting
-            weighted_features = self.df[self.features].values * self.feature_importance
-            song_features = weighted_features[idx]
-            all_features = weighted_features
-            
-            # Calculate weighted feature similarity
-            feature_similarity = np.zeros(len(self.df))
-            for i in range(len(self.df)):
-                feature_similarity[i] = 1.0 / (1.0 + np.sum((song_features - all_features[i])**2))
-            
-            # Combine different similarity metrics
-            final_similarity = 0.5 * combined_similarity + 0.5 * feature_similarity
+            # Apply feature importance weighting if we have numeric features
+            if hasattr(self, 'numeric_features') and self.numeric_features:
+                weighted_features = self.df[self.numeric_features].fillna(0).values * self.feature_importance
+                song_features = weighted_features[idx]
+                all_features = weighted_features
+                
+                # Calculate weighted feature similarity
+                feature_similarity = np.zeros(len(self.df))
+                for i in range(len(self.df)):
+                    feature_similarity[i] = 1.0 / (1.0 + np.sum((song_features - all_features[i])**2))
+                
+                # Combine different similarity metrics
+                final_similarity = 0.5 * combined_similarity + 0.5 * feature_similarity
+            else:
+                final_similarity = combined_similarity
+                
             similarity_scores += final_similarity
         
         if liked_indices:
@@ -465,7 +667,7 @@ class ContentBasedRecommender:
         # Penalize similarity with disliked songs (with stronger penalty)
         for idx in disliked_indices:
             combined_similarity = (cosine_weight * self.similarity_matrix[idx] + 
-                                  rbf_weight * self.rbf_similarity_matrix[idx])
+                                rbf_weight * self.rbf_similarity_matrix[idx])
             similarity_scores -= 0.8 * combined_similarity
             
         # Get top recommendations excluding rated songs
@@ -489,81 +691,157 @@ class ClusteringRecommender:
         self.n_clusters = min(20, len(df) // 100)  # More clusters for finer granularity
         
     def fit(self):
+        print("Training advanced clustering recommender with multiple clustering algorithms...")
         # Create a copy of the dataframe for clustering
         self.df_with_clusters = self.df.copy()
         
+        # Check for non-numeric features
+        non_numeric_features = []
+        for feature in self.features:
+            if feature in self.df.columns:
+                if not pd.api.types.is_numeric_dtype(self.df[feature]) or self.df[feature].isna().any():
+                    non_numeric_features.append(feature)
+        
+        if non_numeric_features:
+            print(f"Warning: Found non-numeric or NaN features: {non_numeric_features}")
+            print("These will be excluded from clustering")
+            
+            # Filter out non-numeric features
+            numeric_features = [f for f in self.features if f not in non_numeric_features]
+            if not numeric_features:
+                print("Error: No numeric features available for clustering")
+                # Create dummy clusters
+                self.df_with_clusters['kmeans_cluster'] = 0
+                self.df_with_clusters['gmm_cluster'] = 0
+                self.df_with_clusters['hierarchical_cluster'] = 0
+                return self
+        else:
+            numeric_features = self.features
+        
+        print(f"Using {len(numeric_features)} numeric features for clustering")
+        
         # Select a subset of features for clustering to avoid curse of dimensionality
-        if len(self.features) > 20:
+        if len(numeric_features) > 20:
             # Use SVD to reduce dimensionality while preserving variance
-            n_components = min(20, len(self.features))
-            svd = TruncatedSVD(n_components=n_components)
-            reduced_features = svd.fit_transform(self.df[self.features])
+            n_components = min(20, len(numeric_features))
+            print(f"Reducing dimensionality from {len(numeric_features)} to {n_components} components")
             
-            # Create new feature names
-            reduced_feature_names = [f'svd_{i}' for i in range(n_components)]
-            
-            # Add reduced features to dataframe
-            for i, name in enumerate(reduced_feature_names):
-                self.df_with_clusters[name] = reduced_features[:, i]
+            try:
+                svd = TruncatedSVD(n_components=n_components)
+                reduced_features = svd.fit_transform(self.df[numeric_features])
                 
-            clustering_features = reduced_feature_names
+                # Create new feature names
+                reduced_feature_names = [f'svd_{i}' for i in range(n_components)]
+                
+                # Add reduced features to dataframe
+                for i, name in enumerate(reduced_feature_names):
+                    self.df_with_clusters[name] = reduced_features[:, i]
+                    
+                clustering_features = reduced_feature_names
+                print(f"Dimensionality reduction complete. Explained variance: {sum(svd.explained_variance_ratio_):.2f}")
+            except Exception as e:
+                print(f"Error in dimensionality reduction: {e}")
+                # Fallback to using fewer original features
+                clustering_features = numeric_features[:min(20, len(numeric_features))]
+                print(f"Falling back to using {len(clustering_features)} original features")
         else:
-            clustering_features = self.features
+            clustering_features = numeric_features
         
-        # 1. K-means clustering
-        self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=42, n_init=10)
-        self.df_with_clusters['kmeans_cluster'] = self.kmeans.fit_predict(self.df_with_clusters[clustering_features])
+        # Check for any remaining issues with the data
+        has_issues = False
+        for feature in clustering_features:
+            if feature not in self.df_with_clusters.columns:
+                print(f"Warning: Feature {feature} not found in dataframe")
+                has_issues = True
+            elif self.df_with_clusters[feature].isna().any():
+                print(f"Warning: Feature {feature} contains NaN values")
+                has_issues = True
         
-        # 2. Gaussian Mixture Model
-        self.gmm = GaussianMixture(n_components=self.n_clusters, random_state=42, n_init=3)
-        self.df_with_clusters['gmm_cluster'] = self.gmm.fit_predict(self.df_with_clusters[clustering_features])
+        if has_issues:
+            print("Fixing issues in clustering features...")
+            valid_features = []
+            for feature in clustering_features:
+                if feature in self.df_with_clusters.columns:
+                    self.df_with_clusters[feature] = self.df_with_clusters[feature].fillna(0)
+                    valid_features.append(feature)
+            
+            clustering_features = valid_features
+            print(f"Using {len(clustering_features)} valid features for clustering")
         
-        # 3. Hierarchical Clustering (on a sample if dataset is large)
-        if len(self.df) > 10000:
-            # Sample for hierarchical clustering which is computationally expensive
-            sample_indices = np.random.choice(len(self.df), size=10000, replace=False)
-            sample_features = self.df_with_clusters.iloc[sample_indices][clustering_features]
+        # Determine number of clusters based on dataset size
+        self.n_clusters = min(20, len(self.df) // 100)
+        print(f"Using {self.n_clusters} clusters")
+        
+        try:
+            # 1. K-means clustering
+            print("Performing K-means clustering...")
+            self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=42, n_init=10)
+            self.df_with_clusters['kmeans_cluster'] = self.kmeans.fit_predict(self.df_with_clusters[clustering_features])
             
-            self.hierarchical = AgglomerativeClustering(n_clusters=self.n_clusters)
-            sample_clusters = self.hierarchical.fit_predict(sample_features)
+            # 2. Gaussian Mixture Model
+            print("Performing Gaussian Mixture Model clustering...")
+            self.gmm = GaussianMixture(n_components=self.n_clusters, random_state=42, n_init=3)
+            self.df_with_clusters['gmm_cluster'] = self.gmm.fit_predict(self.df_with_clusters[clustering_features])
             
-            # Initialize all with -1
-            self.df_with_clusters['hierarchical_cluster'] = -1
-            
-            # Assign clusters to sampled points
-            for i, idx in enumerate(sample_indices):
-                self.df_with_clusters.loc[idx, 'hierarchical_cluster'] = sample_clusters[i]
+            # 3. Hierarchical Clustering (on a sample if dataset is large)
+            print("Performing Hierarchical clustering...")
+            if len(self.df) > 10000:
+                # Sample for hierarchical clustering which is computationally expensive
+                sample_indices = np.random.choice(len(self.df), size=10000, replace=False)
+                sample_features = self.df_with_clusters.iloc[sample_indices][clustering_features]
                 
-            # For non-sampled points, assign to nearest centroid
-            # First, compute centroids from sample
-            centroids = {}
-            for cluster in range(self.n_clusters):
-                cluster_samples = sample_indices[sample_clusters == cluster]
-                if len(cluster_samples) > 0:
-                    centroids[cluster] = self.df_with_clusters.iloc[cluster_samples][clustering_features].mean().values
-            
-            # Assign remaining points to nearest centroid
-            unassigned = self.df_with_clusters['hierarchical_cluster'] == -1
-            for idx in self.df_with_clusters[unassigned].index:
-                point = self.df_with_clusters.loc[idx, clustering_features].values
-                min_dist = float('inf')
-                best_cluster = 0
+                self.hierarchical = AgglomerativeClustering(n_clusters=self.n_clusters)
+                sample_clusters = self.hierarchical.fit_predict(sample_features)
                 
-                for cluster, centroid in centroids.items():
-                    dist = np.sum((point - centroid) ** 2)
-                    if dist < min_dist:
-                        min_dist = dist
-                        best_cluster = cluster
-                        
-                self.df_with_clusters.loc[idx, 'hierarchical_cluster'] = best_cluster
-        else:
-            # If dataset is small enough, run hierarchical on full dataset
-            self.hierarchical = AgglomerativeClustering(n_clusters=self.n_clusters)
-            self.df_with_clusters['hierarchical_cluster'] = self.hierarchical.fit_predict(
-                self.df_with_clusters[clustering_features])
+                # Initialize all with -1
+                self.df_with_clusters['hierarchical_cluster'] = -1
+                
+                # Assign clusters to sampled points
+                for i, idx in enumerate(sample_indices):
+                    self.df_with_clusters.loc[idx, 'hierarchical_cluster'] = sample_clusters[i]
+                    
+                # For non-sampled points, assign to nearest centroid
+                # First, compute centroids from sample
+                centroids = {}
+                for cluster in range(self.n_clusters):
+                    cluster_samples = sample_indices[sample_clusters == cluster]
+                    if len(cluster_samples) > 0:
+                        centroids[cluster] = self.df_with_clusters.iloc[cluster_samples][clustering_features].mean().values
+                
+                # Assign remaining points to nearest centroid
+                unassigned = self.df_with_clusters['hierarchical_cluster'] == -1
+                for idx in self.df_with_clusters[unassigned].index:
+                    point = self.df_with_clusters.loc[idx, clustering_features].values
+                    min_dist = float('inf')
+                    best_cluster = 0
+                    
+                    for cluster, centroid in centroids.items():
+                        dist = np.sum((point - centroid) ** 2)
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_cluster = cluster
+                            
+                    self.df_with_clusters.loc[idx, 'hierarchical_cluster'] = best_cluster
+            else:
+                # If dataset is small enough, run hierarchical on full dataset
+                self.hierarchical = AgglomerativeClustering(n_clusters=self.n_clusters)
+                self.df_with_clusters['hierarchical_cluster'] = self.hierarchical.fit_predict(
+                    self.df_with_clusters[clustering_features])
+            
+            print("Clustering complete")
+        except Exception as e:
+            print(f"Error during clustering: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Assign default clusters
+            self.df_with_clusters['kmeans_cluster'] = np.random.randint(0, self.n_clusters, size=len(self.df))
+            self.df_with_clusters['gmm_cluster'] = np.random.randint(0, self.n_clusters, size=len(self.df))
+            self.df_with_clusters['hierarchical_cluster'] = np.random.randint(0, self.n_clusters, size=len(self.df))
+            print("Used random cluster assignments as fallback")
         
         return self
-        
+
     def recommend(self, liked_ids, disliked_ids, n=10):
         if not liked_ids:
             return []
@@ -1067,7 +1345,23 @@ class PureCollaborativeFiltering:
     
     def _create_synthetic_data(self, n_songs):
         n_users = self.n_dummy_users + 1  # +1 for the actual user (user 0)
+    
+        # Check for non-numeric features
+        non_numeric_features = []
+        for feature in self.features:
+            if feature in self.df.columns:
+                if not pd.api.types.is_numeric_dtype(self.df[feature]) or self.df[feature].isna().any():
+                    non_numeric_features.append(feature)
         
+        if non_numeric_features:
+            print(f"Warning: Found non-numeric or NaN features in collaborative filtering: {non_numeric_features}")
+            print("These will be excluded from user profile creation")
+            
+            # Filter out non-numeric features
+            self.numeric_features = [f for f in self.features if f not in non_numeric_features]
+            print(f"Using {len(self.numeric_features)} numeric features for collaborative filtering")
+        else:
+            self.numeric_features = self.features
         # Create a sparse matrix directly
         data = []
         row = []
@@ -1236,12 +1530,31 @@ class DeepLearningRecommender:
         
     def fit(self):
         # Create a mapping of song IDs to indices
+        print("Training advanced deep learning recommender with complex neural architecture...")
+        # Create a mapping of song IDs to indices
         unique_songs = self.df['track_id'].unique()
         self.song_mapping = {song: i for i, song in enumerate(unique_songs)}
         self.reverse_mapping = {i: song for song, i in self.song_mapping.items()}
         
+        # Check for non-numeric features
+        non_numeric_features = []
+        for feature in self.features:
+            if feature in self.df.columns:
+                if not pd.api.types.is_numeric_dtype(self.df[feature]) or self.df[feature].isna().any():
+                    non_numeric_features.append(feature)
+        
+        if non_numeric_features:
+            print(f"Warning: Found non-numeric or NaN features in deep learning: {non_numeric_features}")
+            print("These will be excluded from model training")
+            
+            # Filter out non-numeric features
+            self.numeric_features = [f for f in self.features if f not in non_numeric_features]
+            print(f"Using {len(self.numeric_features)} numeric features for deep learning")
+        else:
+            self.numeric_features = self.features
+        
         # Extract song features
-        self.song_features = self.df[self.features].values
+        self.song_features = self.df[self.numeric_features].fillna(0).values
         
         # Normalize features
         self.scaler = MinMaxScaler()
@@ -1477,21 +1790,43 @@ class AdaptiveEnsembleRecommender:
         sorted_recs = sorted(rec_scores.items(), key=lambda x: x[1], reverse=True)
         return [rec for rec, _ in sorted_recs[:n]]
 
-# Function to get user ratings
-def get_user_ratings(df, song_ids):
+def get_user_ratings(df, movie_ids):
     liked_ids = []
     disliked_ids = []
     neutral_ids = []
     
-    print("\n=== SONG RATING PHASE ===")
-    print("Please rate each song as 'like' (l), 'dislike' (d), or 'neutral' (n)")
+    print("\n=== MOVIE RATING PHASE ===")
+    print("Please rate each movie as 'like' (l), 'dislike' (d), or 'neutral' (n)")
     
-    for song_id in song_ids:
-        song = df[df['track_id'] == song_id].iloc[0]
-        print(f"\nSong: {song['track_name']}")
-        print(f"Artist: {song['track_artist']}")
-        print(f"Album: {song['track_album_name']}")
-        print(f"Genre: {song['playlist_genre']} - {song['playlist_subgenre']}")
+    # Remove any duplicates in movie_ids
+    movie_ids = list(dict.fromkeys(movie_ids))
+    
+    for i, movie_id in enumerate(movie_ids, 1):
+        movie = df[df['track_id'] == movie_id].iloc[0]
+        
+        # Display movie information
+        print(f"\n{i}/{len(movie_ids)} - Movie: {movie['title']}")
+        
+        # Display genres
+        if 'genre_names' in movie and isinstance(movie['genre_names'], list):
+            genres = ', '.join(movie['genre_names'])
+            print(f"Genres: {genres}")
+        
+        # Display release date
+        if 'release_date' in movie:
+            print(f"Release Date: {movie['release_date']}")
+        
+        # Display rating
+        if 'vote_average' in movie and 'vote_count' in movie:
+            print(f"Rating: {movie['vote_average']} (from {movie['vote_count']} votes)")
+        
+        # Display overview if available
+        if 'overview' in movie and isinstance(movie['overview'], str) and len(movie['overview']) > 0:
+            # Truncate long overviews
+            overview = movie['overview']
+            if len(overview) > 200:
+                overview = overview[:197] + "..."
+            print(f"Overview: {overview}")
         
         while True:
             rating = input("Your rating (l/d/n): ").lower()
@@ -1499,28 +1834,28 @@ def get_user_ratings(df, song_ids):
                 break
             print("Invalid input. Please enter 'l' for like, 'd' for dislike, or 'n' for neutral.")
         
-        if rating == '1' or rating == 'l':
-            liked_ids.append(song_id)
-        elif rating == '0' or rating == 'd':
-            disliked_ids.append(song_id)
+        if rating == 'l':
+            liked_ids.append(movie_id)
+        elif rating == 'd':
+            disliked_ids.append(movie_id)
         else:
-            neutral_ids.append(song_id)
+            neutral_ids.append(movie_id)
     
     return liked_ids, disliked_ids, neutral_ids
 
-# Display recommendations
-def display_recommendations(df, recommendations, title="Recommended Songs"):
+def display_recommendations(df, recommendations, title="Recommended Movies"):
     print(f"\n=== {title} ===")
     
     if not recommendations:
-        print("No recommendations available. Please rate more songs.")
+        print("No recommendations available. Please rate more movies.")
         return
     
-    for i, song_id in enumerate(recommendations, 1):
-        song = df[df['track_id'] == song_id].iloc[0]
-        print(f"{i}. {song['track_name']} - {song['track_artist']} ({song['playlist_genre']})")
+    for i, movie_id in enumerate(recommendations, 1):
+        movie = df[df['track_id'] == movie_id].iloc[0]
+        genres = ', '.join(movie['genre_names'])
+        print(f"{i}. {movie['title']} ({genres}) - Rating: {movie['vote_average']}")
 
-# Add these new functions to the music recommender code
+# Add these new functions
 
 def get_pruned_recommendations(df, liked_ids, disliked_ids, n=15):
     """Generate recommendations using minimal computation"""
@@ -1531,37 +1866,37 @@ def get_pruned_recommendations(df, liked_ids, disliked_ids, n=15):
     
     start_time = time.time()
     
-    # 1. Extract features from liked and disliked songs
-    # Use only basic audio features to minimize computation
-    basic_features = ['acousticness', 'danceability', 'energy', 'tempo']
+    # 1. Extract features from liked and disliked items
+    # Use only basic numerical features to minimize computation
+    basic_features = ['vote_average', 'popularity']
     basic_features = [f for f in basic_features if f in df.columns]
     
     if not basic_features:
-        # Fallback to using genre features if no audio features
+        # Fallback to using genre features if no numerical features
         basic_features = [col for col in df.columns if col.startswith('genre_')][:5]
     
     # 2. Calculate a simple similarity score
     liked_profiles = df[df['track_id'].isin(liked_ids)][basic_features].fillna(0).mean()
     
-    # 3. Score all songs based on similarity to the average liked profile
+    # 3. Score all items based on similarity to the average liked profile
     # This is much faster than computing a full similarity matrix
     scores = np.zeros(len(df))
     
-    for i, song in enumerate(df.itertuples()):
-        song_features = np.array([getattr(song, feat) for feat in basic_features])
+    for i, item in enumerate(df.itertuples()):
+        item_features = np.array([getattr(item, feat) for feat in basic_features])
         # Simple Euclidean distance (negative so higher is better)
-        scores[i] = -np.sum((song_features - liked_profiles.values) ** 2)
+        scores[i] = -np.sum((item_features - liked_profiles.values) ** 2)
     
-    # 4. Penalize disliked songs' features
+    # 4. Penalize disliked items' features
     if disliked_ids:
         disliked_profiles = df[df['track_id'].isin(disliked_ids)][basic_features].fillna(0).mean()
-        for i, song in enumerate(df.itertuples()):
-            song_features = np.array([getattr(song, feat) for feat in basic_features])
-            # Add penalty based on similarity to disliked songs
-            penalty = -np.sum((song_features - disliked_profiles.values) ** 2)
+        for i, item in enumerate(df.itertuples()):
+            item_features = np.array([getattr(item, feat) for feat in basic_features])
+            # Add penalty based on similarity to disliked items
+            penalty = -np.sum((item_features - disliked_profiles.values) ** 2)
             scores[i] -= 0.5 * penalty  # Reduce penalty effect
     
-    # 5. Set scores of rated songs to -inf
+    # 5. Set scores of rated items to -inf
     rated_indices = df[df['track_id'].isin(liked_ids + disliked_ids)].index
     scores[rated_indices] = -np.inf
     
@@ -1575,7 +1910,7 @@ def get_pruned_recommendations(df, liked_ids, disliked_ids, n=15):
     return recommendations
 
 def get_genre_based_recommendations(df, liked_ids, disliked_ids, n=15):
-    """Generate random recommendations matching the genres of liked songs"""
+    """Generate random recommendations matching the genres of liked items"""
     print("\nGenerating genre-based random recommendations...")
     
     if not liked_ids:
@@ -1583,13 +1918,13 @@ def get_genre_based_recommendations(df, liked_ids, disliked_ids, n=15):
     
     start_time = time.time()
     
-    # Get genres from liked songs
+    # Get genres from liked items
     liked_genres = set()
-    for song_id in liked_ids:
-        if song_id in df['track_id'].values:
-            song = df[df['track_id'] == song_id].iloc[0]
-            if 'playlist_genre' in song:
-                liked_genres.add(song['playlist_genre'])
+    for item_id in liked_ids:
+        if item_id in df['track_id'].values:
+            item = df[df['track_id'] == item_id].iloc[0]
+            if 'genre_names' in item and isinstance(item['genre_names'], list):
+                liked_genres.update(item['genre_names'])
     
     # If no genres found, return random recommendations
     if not liked_genres:
@@ -1600,26 +1935,31 @@ def get_genre_based_recommendations(df, liked_ids, disliked_ids, n=15):
         else:
             return unrated['track_id'].tolist()
     
-    print(f"Found {len(liked_genres)} genres in liked songs: {liked_genres}")
+    print(f"Found {len(liked_genres)} genres in liked items: {liked_genres}")
     
-    # Get songs matching liked genres
-    matching_songs = df[~df['track_id'].isin(liked_ids + disliked_ids)]
-    matching_songs = matching_songs[matching_songs['playlist_genre'].isin(liked_genres)]
+    # Get items matching liked genres
+    matching_items = df[~df['track_id'].isin(liked_ids + disliked_ids)]
     
-    # If not enough matching songs, add some random songs
-    if len(matching_songs) < n:
-        print(f"Only found {len(matching_songs)} songs matching liked genres, adding random songs")
-        additional_needed = n - len(matching_songs)
-        additional_songs = df[~df['track_id'].isin(liked_ids + disliked_ids + matching_songs['track_id'].tolist())]
-        if len(additional_songs) > 0:
-            additional = additional_songs.sample(min(additional_needed, len(additional_songs)))
-            matching_songs = pd.concat([matching_songs, additional])
+    # Filter to items that have at least one genre in common with liked genres
+    if 'genre_names' in matching_items.columns:
+        matching_items = matching_items[matching_items['genre_names'].apply(
+            lambda x: bool(set(x) & liked_genres) if isinstance(x, list) else False
+        )]
     
-    # Sample n songs
-    if len(matching_songs) >= n:
-        recommendations = matching_songs.sample(n)['track_id'].tolist()
+    # If not enough matching items, add some random items
+    if len(matching_items) < n:
+        print(f"Only found {len(matching_items)} items matching liked genres, adding random items")
+        additional_needed = n - len(matching_items)
+        additional_items = df[~df['track_id'].isin(liked_ids + disliked_ids + matching_items['track_id'].tolist())]
+        if len(additional_items) > 0:
+            additional = additional_items.sample(min(additional_needed, len(additional_items)))
+            matching_items = pd.concat([matching_items, additional])
+    
+    # Sample n items
+    if len(matching_items) >= n:
+        recommendations = matching_items.sample(n)['track_id'].tolist()
     else:
-        recommendations = matching_songs['track_id'].tolist()
+        recommendations = matching_items['track_id'].tolist()
     
     elapsed = time.time() - start_time
     print(f"Genre-based recommendations generated in {elapsed:.2f} seconds")
@@ -1627,28 +1967,20 @@ def get_genre_based_recommendations(df, liked_ids, disliked_ids, n=15):
     return recommendations
 
 def get_popularity_recommendations(df, liked_ids, disliked_ids, n=15):
-    """Generate random recommendations from the most popular songs"""
+    """Generate random recommendations from the most popular items"""
     print("\nGenerating popularity-based random recommendations...")
     
     start_time = time.time()
     
     # Determine which column to use for popularity
     popularity_col = None
-    for col in ['popularity', 'track_popularity']:
+    for col in ['popularity', 'vote_count', 'vote_average']:
         if col in df.columns:
             popularity_col = col
             break
     
     if popularity_col is None:
-        print("No popularity column found, using stream count as proxy")
-        # For Spotify data, we can use other metrics as proxy for popularity
-        for col in ['duration_ms', 'loudness']:  # These are weak proxies but better than nothing
-            if col in df.columns:
-                popularity_col = col
-                break
-    
-    if popularity_col is None:
-        print("No popularity indicators found, using random selection")
+        print("No popularity column found, using random selection")
         rated_ids = liked_ids + disliked_ids
         unrated = df[~df['track_id'].isin(rated_ids)]
         if len(unrated) >= n:
@@ -1656,28 +1988,28 @@ def get_popularity_recommendations(df, liked_ids, disliked_ids, n=15):
         else:
             return unrated['track_id'].tolist()
     
-    # Get top 20% most popular songs
+    # Get top 20% most popular items
     top_percentile = 0.2
     popularity_threshold = df[popularity_col].quantile(1 - top_percentile)
-    popular_songs = df[df[popularity_col] >= popularity_threshold]
+    popular_items = df[df[popularity_col] >= popularity_threshold]
     
-    print(f"Selected {len(popular_songs)} songs with {popularity_col} >= {popularity_threshold:.2f}")
+    print(f"Selected {len(popular_items)} items with {popularity_col} >= {popularity_threshold:.2f}")
     
-    # Filter out already rated songs
-    popular_songs = popular_songs[~popular_songs['track_id'].isin(liked_ids + disliked_ids)]
+    # Filter out already rated items
+    popular_items = popular_items[~popular_items['track_id'].isin(liked_ids + disliked_ids)]
     
-    # Sample n songs
-    if len(popular_songs) >= n:
-        recommendations = popular_songs.sample(n)['track_id'].tolist()
+    # Sample n items
+    if len(popular_items) >= n:
+        recommendations = popular_items.sample(n)['track_id'].tolist()
     else:
-        # If not enough popular songs, add some random songs
-        recommendations = popular_songs['track_id'].tolist()
+        # If not enough popular items, add some random items
+        recommendations = popular_items['track_id'].tolist()
         additional_needed = n - len(recommendations)
         
         if additional_needed > 0:
-            additional_songs = df[~df['track_id'].isin(liked_ids + disliked_ids + recommendations)]
-            if len(additional_songs) > 0:
-                additional = additional_songs.sample(min(additional_needed, len(additional_songs)))
+            additional_items = df[~df['track_id'].isin(liked_ids + disliked_ids + recommendations)]
+            if len(additional_items) > 0:
+                additional = additional_items.sample(min(additional_needed, len(additional_items)))
                 recommendations.extend(additional['track_id'].tolist())
     
     elapsed = time.time() - start_time
@@ -1695,25 +2027,43 @@ def display_all_recommendations(df, recommendations_sets, titles):
             print("No recommendations available.")
             continue
         
-        for j, song_id in enumerate(recommendations, 1):
-            song = df[df['track_id'] == song_id].iloc[0]
-            print(f"{j}. {song['track_name']} - {song['track_artist']} ({song['playlist_genre']})")
+        for j, item_id in enumerate(recommendations, 1):
+            item = df[df['track_id'] == item_id].iloc[0]
+            
+            # For movies
+            if 'title' in item and 'genre_names' in item:
+                genres = ', '.join(item['genre_names']) if isinstance(item['genre_names'], list) else item['genre_names']
+                rating = f"{item['vote_average']}" if 'vote_average' in item else "N/A"
+                print(f"{j}. {item['title']} ({genres}) - Rating: {rating}")
+            # For songs (fallback)
+            else:
+                print(f"{j}. {item['track_name']} - {item['track_artist']} ({item['playlist_genre']})")
 
-# Main function
 def main():
-    print("Welcome to the Spotify Song Recommender System!")
-    print("This system will recommend songs based on your preferences using four different strategies.")
+    print("Welcome to the Multi-Strategy Recommender System!")
+    print("This system will recommend items based on your preferences using four different strategies.")
     
     # Download and load data
     dataset_path = download_dataset()
-    df = load_data(dataset_path)
+    
+    try:
+        df = load_data(dataset_path)
+    except FileNotFoundError:
+        print("\nCould not automatically find the dataset.")
+        manual_path = input("Please enter the path to the data file: ")
+        if os.path.exists(manual_path):
+            df = pd.read_csv(manual_path)
+        else:
+            print(f"Error: File not found at {manual_path}")
+            exit(1)
+    
     df, display_df, features = preprocess_data(df)
     
-    # Select initial songs for rating
-    initial_songs = select_initial_songs(df, n=25)
+    # Select initial items for rating
+    initial_items = select_initial_movies(df, n=25)
     
     # Get user ratings
-    liked_ids, disliked_ids, neutral_ids = get_user_ratings(display_df, initial_songs)
+    liked_ids, disliked_ids, neutral_ids = get_user_ratings(display_df, initial_items)
     
     print("\nTraining recommendation models based on your preferences...")
     print("Energy measurement will begin now...")
@@ -1756,7 +2106,7 @@ def main():
     # Create adaptive ensemble
     ensemble = AdaptiveEnsembleRecommender(
         [content_model, cluster_model, pure_model, matrix_model, deep_model],
-        initial_weights=[0.20, 0.20, 0.20, 0.20, 0.20]  # Equal weights
+        initial_weights=[0.20, 0.20, 0.20, 0.20, 0.20]  # Initial weights
     )
     
     # Generate all four sets of recommendations
@@ -1801,16 +2151,16 @@ def main():
     
     while True:
         print("\nOptions:")
-        print("1. Rate more songs")
+        print("1. Rate more items")
         print("2. Get more recommendations")
         print("3. Exit and show energy report")
         
         choice = input("Enter your choice (1/2/3): ")
         
         if choice == '1':
-            # Select more songs for rating
-            more_songs = select_initial_songs(df[~df['track_id'].isin(liked_ids + disliked_ids + neutral_ids)], n=10)
-            new_liked, new_disliked, new_neutral = get_user_ratings(display_df, more_songs)
+            # Select more items for rating
+            more_items = select_initial_movies(df[~df['track_id'].isin(liked_ids + disliked_ids + neutral_ids)], n=10)
+            new_liked, new_disliked, new_neutral = get_user_ratings(display_df, more_items)
             
             # Update preferences
             liked_ids.extend(new_liked)
@@ -1819,10 +2169,10 @@ def main():
             
             # Update ensemble weights based on feedback
             feedback = {}
-            for song_id in new_liked:
-                feedback[song_id] = 1
-            for song_id in new_disliked:
-                feedback[song_id] = -1
+            for item_id in new_liked:
+                feedback[item_id] = 1
+            for item_id in new_disliked:
+                feedback[item_id] = -1
                 
             ensemble.update_weights(feedback)
             
@@ -1890,7 +2240,7 @@ def main():
             feedback_count += 1
             
         elif choice == '3':
-            print("\nThank you for using the Spotify Song Recommender System!")
+            print("\nThank you for using the Multi-Strategy Recommender System!")
             
             # Print performance report
             print("\n=== PERFORMANCE REPORT ===")
@@ -1907,30 +2257,6 @@ def main():
             print(f"- Genre-Based: {genre_time:.2f} seconds")
             print(f"- Popularity-Based: {popular_time:.2f} seconds")
             
-            # Compare energy efficiency
-            print("\n=== ENERGY EFFICIENCY COMPARISON ===")
-            print("Ranking from most to least energy efficient:")
-            
-            # Create a list of (method, time) tuples and sort by time
-            methods = [
-                ("Popularity-Based Random", popular_time),
-                ("Genre-Based Random", genre_time),
-                ("Pruned ML", pruned_time),
-                ("Full Ensemble ML", ensemble_time)
-            ]
-            methods.sort(key=lambda x: x[1])
-            
-            # Print the ranking
-            for i, (method, timed) in enumerate(methods, 1):
-                print(f"{i}. {method}: {timed:.2f} seconds")
-            
-            # Calculate relative efficiency
-            fastest = methods[0][1]
-            print("\nRelative Efficiency (compared to fastest method):")
-            for method, timed in methods:
-                relative = timed / fastest
-                print(f"- {method}: {relative:.2f}x slower than fastest")
-            
             # Generate and print energy report
             emissions = energy_tracker.stop()
             energy_report = energy_tracker.generate_report(emissions)
@@ -1940,6 +2266,6 @@ def main():
             
         else:
             print("Invalid choice. Please try again.")
-
+            
 if __name__ == "__main__":
     main()

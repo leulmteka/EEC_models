@@ -164,3 +164,60 @@ Energy breakdown by component:
 - Pure Collaborative Filtering Model: 0.326044 kWh (7.8%)
 - Content-based Model: 0.135422 kWh (3.2%)
 - Deep Learning Model: 0.013948 kWh (0.3%)
+
+
+=== PERFORMANCE REPORT ===
+Content-Based Model Training: 17.06 seconds
+Clustering Model Training: 79.50 seconds
+Pure Collaborative Filtering Training: 30.44 seconds
+Matrix Factorization Training: 47.87 seconds
+Deep Learning Model Training: 0.87 seconds
+Total Training Time: 175.75 seconds
+
+Recommendation Generation Times (Initial):
+- Full Ensemble: 77.68 seconds
+- Pruned ML: 0.79 seconds
+- Genre-Based: 0.06 seconds
+- Popularity-Based: 0.01 seconds
+
+=== ENERGY EFFICIENCY COMPARISON ===
+Ranking from most to least energy efficient:
+1. Popularity-Based Random: 0.01 seconds
+2. Genre-Based Random: 0.06 seconds
+3. Pruned ML: 0.79 seconds
+4. Full Ensemble ML: 77.68 seconds
+
+Relative Efficiency (compared to fastest method):
+- Popularity-Based Random: 1.00x slower than fastest
+- Genre-Based Random: 8.15x slower than fastest
+- Pruned ML: 113.44x slower than fastest
+- Full Ensemble ML: 11167.22x slower than fastest
+
+=== ENERGY CONSUMPTION REPORT ===
+Total Energy Consumption: 4.642943 kWh
+Estimated CO2 Emissions: 5.853699 kg CO2eq
+(Note: GPU energy was estimated as direct measurement failed)
+
+This is equivalent to:
+- Charging a smartphone 365.6 times
+- Keeping a 10W LED light bulb on for 464.3 hours
+- Driving a car for 14.63 miles
+
+Energy breakdown by component:
+- Full Ensemble Recommendations: 1.331328 kWh (28.7%)
+- Full Ensemble Round 1: 0.952255 kWh (20.5%)
+- Clustering Model: 0.775798 kWh (16.7%)
+- Full Ensemble Round 2: 0.588040 kWh (12.7%)
+- Matrix Factorization Model: 0.503723 kWh (10.8%)
+- Pure Collaborative Filtering Model: 0.320272 kWh (6.9%)
+- Content-based Model: 0.138620 kWh (3.0%)
+- Deep Learning Model: 0.012976 kWh (0.3%)
+- Pruned ML Recommendations: 0.006585 kWh (0.1%)
+- Pruned ML Round 1: 0.006187 kWh (0.1%)
+- Pruned ML Round 2: 0.005973 kWh (0.1%)
+- Genre-Based Round 2: 0.000429 kWh (0.0%)
+- Genre-Based Round 1: 0.000326 kWh (0.0%)
+- Genre-Based Recommendations: 0.000263 kWh (0.0%)
+- Popularity-Based Recommendations: 0.000060 kWh (0.0%)
+- Popularity-Based Round 1: 0.000053 kWh (0.0%)
+- Popularity-Based Round 2: 0.000053 kWh (0.0%)
