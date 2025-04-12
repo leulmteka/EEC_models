@@ -1,0 +1,211 @@
+The DeepSeek implementation only manages to get through the reference guide questions and seems to maintain no memory
+of the responses after one follow-up question. It frequently takes longer than 3 minutes to process and once processed,
+the question asked is nonsensical or defaults to "Can you elaborate on that?". DeepSeek fails the RAG test.
+
+The OpenAI implementation successfully asks insightful follow ups and although at times it is redundant, this is an
+issue of prompting. With more creatively crafted prompts, the model would still successfully carry out a conversation
+that effectively gathers user perspectives on the topic. The implementation rarely defaults to "Can you elaborate on that?"
+and succeeds in using RAG to conduct the interview.
+The following is the OpenAI GPT-4o implementation output:
+
+
+RAG Context - Product Information:
+Interview Guide:
+===================================================
+Churro Chiller Interview Guide for RAG Implementation
+===================================================
+
+Purpose:
+----------
+This guide is designed to stimulate a natural, open-ended conversation about Taco Bell's new “Churro Chiller.” It covers key topics—overall interest, flavor expectations, experience/enjoyment, pairing with food, price sensitivity, and comparative feedback—while offering follow-up ideas to elicit deeper insights.
+
+---------------------------------------------------
+Section 1: Introduction & Overall Impressions
+---------------------------------------------------
+Primary Question:
+   - What are your overall thoughts about a Churro Chiller—a cinnamon-infused, caffeinated, fizzy frozen drink?
+
+---------------------------------------------------
+Section 2: Flavor Profile & Sensory Expectations
+---------------------------------------------------
+Primary Question:
+   - How would you describe the flavor profile you expect from a cinnamon-flavored, fizzy drink?
+
+---------------------------------------------------
+Section 3: Experience & Enjoyment
+---------------------------------------------------
+Primary Question:
+   - Have you had a chance to try the Churro Chiller? If not, what do you imagine it might be like?
+
+---------------------------------------------------
+Section 4: Menu Pairings & Usage
+---------------------------------------------------
+Primary Question:
+   - Taco Bell offers a discount when the Churro Chiller is paired with items like a Cheesy Gordita Crunch or a Crunchwrap Supreme. What do you think about that pairing?
+
+---------------------------------------------------
+Section 5: Comparisons & Price
+---------------------------------------------------
+Primary Questions:
+   - How does the Churro Chiller compare to other beverages available?
+   - What would you consider a reasonable price for it?
+
+---------------------------------------------------
+Usage Instructions:
+   - Use the primary questions to initiate discussion on each topic.
+   - Dynamically generate follow-up questions based on user responses, bouncing back on new details, asking for clarifications, examples, and elaborations.
+   - Remain strictly focused on the current topic to gain in-depth feedback before moving on.
+===================================================
+
+
+Churro Chiller:
+The Churro Chiller is a new beverage by Taco Bell, similar to a Baja Blast but with a cinnamon twist. It retains the caffeine and fizz of a frozen Mountain Dew-based drink, contains no artificial colorings or additives, and is offered at a discount when purchased with a Cheesy Gordita Crunch or a Crunchwrap Supreme.
+
+RAG Context - Interview Guide:
+Interview Guide:
+===================================================
+Churro Chiller Interview Guide for RAG Implementation
+===================================================
+
+Purpose:
+----------
+This guide is designed to stimulate a natural, open-ended conversation about Taco Bell's new “Churro Chiller.” It covers key topics—overall interest, flavor expectations, experience/enjoyment, pairing with food, price sensitivity, and comparative feedback—while offering follow-up ideas to elicit deeper insights.
+
+---------------------------------------------------
+Section 1: Introduction & Overall Impressions
+---------------------------------------------------
+Primary Question:
+   - What are your overall thoughts about a Churro Chiller—a cinnamon-infused, caffeinated, fizzy frozen drink?
+
+---------------------------------------------------
+Section 2: Flavor Profile & Sensory Expectations
+---------------------------------------------------
+Primary Question:
+   - How would you describe the flavor profile you expect from a cinnamon-flavored, fizzy drink?
+
+---------------------------------------------------
+Section 3: Experience & Enjoyment
+---------------------------------------------------
+Primary Question:
+   - Have you had a chance to try the Churro Chiller? If not, what do you imagine it might be like?
+
+---------------------------------------------------
+Section 4: Menu Pairings & Usage
+---------------------------------------------------
+Primary Question:
+   - Taco Bell offers a discount when the Churro Chiller is paired with items like a Cheesy Gordita Crunch or a Crunchwrap Supreme. What do you think about that pairing?
+
+---------------------------------------------------
+Section 5: Comparisons & Price
+---------------------------------------------------
+Primary Questions:
+   - How does the Churro Chiller compare to other beverages available?
+   - What would you consider a reasonable price for it?
+
+---------------------------------------------------
+Usage Instructions:
+   - Use the primary questions to initiate discussion on each topic.
+   - Dynamically generate follow-up questions based on user responses, bouncing back on new details, asking for clarifications, examples, and elaborations.
+   - Remain strictly focused on the current topic to gain in-depth feedback before moving on.
+===================================================
+
+--------------------------------------------------------------------------------
+
+Interviewer: What are your overall thoughts about a Churro Chiller—a cinnamon-infused, caffeinated, fizzy frozen drink?
+You: I am apprehensive
+Interviewer: What specific aspects of the Churro Chiller make you feel apprehensive, and could you elaborate on any past experiences or preferences that contribute to this feeling?
+You: Churros make me think of dessert, not beverages
+Interviewer: How do your associations of churros with dessert influence your interest or willingness to try the Churro Chiller, and could you share any experiences where a similar flavor combination in a different context either worked well or didn't meet your expectations?
+You: I think it would be better as an ice cream than a fizzy drink
+Interviewer: Could you please elaborate further on that?
+You: Well cinnamon is a good taste because it is sweet but I am also afraid it is spicy and that wont be good for a drink
+
+--- End of topic 'interest' ---
+
+
+Interviewer: How would you describe the flavor profile you expect from a cinnamon-flavored, fizzy drink?
+You: has to be crispy
+Interviewer: Could you explain what you mean by "crispy" in the context of a flavor profile for a drink, and perhaps share examples of how a drink has successfully or unsuccessfully achieved a similar sensation for you in the past?
+You: I want it to have a good mouth feel and make my tongue tingle
+Interviewer: How do you envision the combination of crispiness and a tingling sensation contributing to an enjoyable mouthfeel in the Churro Chiller, and can you think of any other beverages you've tried that successfully balanced these elements to enhance the overall drinking experience?
+You: The baja blast has a great mouth feel
+Interviewer: What specific qualities of the Baja Blast contribute to its great mouthfeel, and how do you think those qualities could be incorporated into the Churro Chiller to achieve the crispy and tingling sensation you desire?
+You: The cinnamon has a unique opportunity to make the tongue tingle and make me keep drinking to quench the spice
+
+--- End of topic 'flavor_impression' ---
+
+
+Interviewer: Have you had a chance to try the Churro Chiller? If not, what do you imagine it might be like?
+You: I tried it and didnt love it
+Interviewer: What aspects of the Churro Chiller did not meet your expectations or contribute to your lack of enjoyment, and can you identify any particular elements that could be adjusted to potentially enhance your experience with it in the future?
+You: The color was strange and the flavor was bitter
+Interviewer: How did the strange color and bitter flavor of the Churro Chiller impact your overall enjoyment of the drink, and can you suggest any adjustments to the flavor or appearance that might make it more appealing to you in the future?
+You: I was expecting a more appetizing look and taste, but the actual taste made me reel back a little bit. I would suggest being sweeter
+Interviewer: How do you think a sweeter flavor profile could transform your overall enjoyment of the Churro Chiller, and could you provide examples of other sweet beverages that have successfully met your expectations in terms of taste and appearance?
+You: It would pair well with the menu
+
+--- End of topic 'enjoyment' ---
+
+
+Interviewer: Taco Bell offers a discount when the Churro Chiller is paired with items like a Cheesy Gordita Crunch or a Crunchwrap Supreme. What do you think about that pairing?
+You: I like that combination
+Interviewer: What specific qualities or flavors in the Cheesy Gordita Crunch or Crunchwrap Supreme do you think complement the Churro Chiller, and how do you believe this pairing enhances the overall dining experience at Taco Bell?
+You: Those are good I like the crunchwrap but I would prefer a pairing with the steak grilled cheese burrito.
+Interviewer: What elements of the steak grilled cheese burrito do you think would pair particularly well with the Churro Chiller, and how might this combination enhance your overall dining experience compared to other menu pairings?
+You: I like the grilled cheese and I think cinnamon pairs well with it
+Interviewer: Could you elaborate on how the flavors of the grilled cheese in the steak grilled cheese burrito interact with the cinnamon in the Churro Chiller to create a satisfying pairing, and are there any particular taste sensations or textures you anticipate experiencing that make this combination appealing to you?
+You: I am not sure.
+
+--- End of topic 'menu_pairings' ---
+
+
+Interviewer: How do you think the Churro Chiller compares to other beverages available?
+You: It is not as good
+Interviewer: Could you please elaborate further on that?
+You: Other drinks have a unique taste but this one focuses on the churro theme
+Interviewer: Could you please elaborate further on that?
+You: It seems gimmicky to base the drink off of a churro rather than create a unique profile
+Interviewer: What are some specific examples of other beverages that you feel successfully create a unique taste profile, and how do they differ from the Churro Chiller in terms of flavor innovation and overall appeal?
+You: The Baja Blast is incredible. It has everything I want.
+
+--- End of topic 'comparisons' ---
+
+
+Interviewer: What would you consider a reasonable price for a beverage like the Churro Chiller?
+You: $2 
+Interviewer: What factors contribute to your perception of $2 as a reasonable price for the Churro Chiller, and are there any particular aspects of the drink, such as size or ingredients, that influence your willingness to pay that amount?
+You: The rest of the menu is getting expensive with inflation so I don't like having add ons
+Interviewer: How does the current pricing of other menu items at Taco Bell, considering inflation, influence your decision about what constitutes a fair price for the Churro Chiller, and are there specific price points for other beverages that you use as a benchmark for determining your willingness to pay for new drink options?
+You: If I am going to pay $20 for two burritos and a quesadilla, I am not going to buy a drink too
+Interviewer: How do your experiences with rising menu prices at Taco Bell influence your overall dining choices, and could you share how this impacts your willingness to explore new or additional menu items like the Churro Chiller, considering your current budget constraints?
+You: 10 years ago I would have paid for the drink because the food was cheaper
+
+--- End of topic 'willingness_to_pay' ---
+
+Interviewer: Is there anything else you would like to add or any other feedback on the Churro Chiller?
+You: No
+
+Interviewer: Thank you for your detailed feedback on the Churro Chiller. Your insights are very valuable!
+
+--- Aggregated Interview Responses ---
+
+Interest:
+I am apprehensive Churros make me think of dessert, not beverages I think it would be better as an ice cream than a fizzy drink Well cinnamon is a good taste because it is sweet but I am also afraid it is spicy and that wont be good for a drink
+
+Flavor_impression:
+has to be crispy I want it to have a good mouth feel and make my tongue tingle The baja blast has a great mouth feel The cinnamon has a unique opportunity to make the tongue tingle and make me keep drinking to quench the spice
+
+Enjoyment:
+I tried it and didnt love it The color was strange and the flavor was bitter I was expecting a more appetizing look and taste, but the actual taste made me reel back a little bit. I would suggest being sweeter It would pair well with the menu
+
+Menu_pairings:
+I like that combination Those are good I like the crunchwrap but I would prefer a pairing with the steak grilled cheese burrito. I like the grilled cheese and I think cinnamon pairs well with it I am not sure.
+
+Comparisons:
+It is not as good Other drinks have a unique taste but this one focuses on the churro theme It seems gimmicky to base the drink off of a churro rather than create a unique profile The Baja Blast is incredible. It has everything I want.
+
+Willingness_to_pay:
+$2 The rest of the menu is getting expensive with inflation so I don't like having add ons If I am going to pay $20 for two burritos and a quesadilla, I am not going to buy a drink too 10 years ago I would have paid for the drink because the food was cheaper
+
+Additional Comments:
+No
